@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+  <html lang="zh-TW">
+    <head>
+    <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>單細胞定序數據標準化 (Normalization) 互動指南</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+          <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+            <!-- Chosen Palette: Slate & Indigo (Professional, Clean, Scientific) -->
+            <!-- Application Structure Plan: The SPA is structured into four logical sections: 1. The 'Why' (Technical Noise vs Biological Variation) using interactive cards to introduce the problem. 2. The 'How' (Evolution of Methods) featuring an interactive dynamic chart demonstrating how different algorithms transform data distributions. 3. Method Comparison Matrix for quick reference. 4. Best Practices & Workflow integrating FAQs and a step-by-step guide. This structure walks the user from problem identification to conceptual understanding, detailed comparison, and finally practical application. -->
+            <!-- Visualization & Content Choices: 1. Problem Cards -> Goal: Inform -> Method: HTML Grid Cards with hover effects -> Justification: Breaks down technical concepts into digestible chunks. 2. Distribution Chart -> Goal: Compare -> Method: Chart.js Line Chart (simulating density plots) -> Interaction: Buttons to switch between Raw/LogNorm/SCTransform -> Justification: Visually demonstrates the mathematical impact of normalization on data shape (NO SVG/Mermaid used). 3. Comparison Table -> Goal: Organize -> Method: Tailwind styled HTML table. 4. Workflow/FAQ -> Goal: Organize/Inform -> Method: HTML details/summary and flexbox steps. -->
+            <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+            <style>
+            .chart-container {
+              position: relative;
+              width: 100%;
+              max-width: 800px;
+              margin-left: auto;
+              margin-right: auto;
+              height: 40vh;
+              max-height: 450px;
+              min-height: 300px;
+            }
+          body {
+            background-color: #f8fafc;
+              color: #1e293b;
+              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+          }
+          .step-circle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 3rem;
+            height: 3rem;
+            border-radius: 9999px;
+            background-color: #4f46e5;
+              color: white;
+            font-weight: bold;
+            font-size: 1.25rem;
+            margin-bottom: 1rem;
+          }
+          </style>
+            </head>
+            <body class="antialiased selection:bg-indigo-200 selection:text-indigo-900">
+            
+            <header class="bg-indigo-900 text-white py-16 shadow-lg">
+            <div class="max-w-6xl mx-auto px-6">
+            <h1 class="text-4xl md:text-5xl font-extrabold mb-4 tracking-tight">單細胞定序數據標準化 (Normalization)</h1>
+            <p class="text-xl md:text-2xl text-indigo-200 max-w-3xl leading-relaxed">
+            消除技術偏差，揭示真實的生物學差異。探索從傳統縮放方法到現代主流 SCTransform 的演進與實踐。
+          </p>
+            </div>
+            </header>
+            
+            <main class="max-w-6xl mx-auto px-6 py-12 space-y-20">
+            
+            <section id="why-normalize">
+            <div class="mb-8">
+            <h2 class="text-3xl font-bold text-slate-800 mb-4 border-b-4 border-indigo-500 pb-2 inline-block">1. 為什麼需要標準化？</h2>
+            <p class="text-lg text-slate-600 leading-relaxed">
+            本區塊介紹了在 scRNA-seq 實驗中不可避免的技術干擾。在實驗過程中，即使是相同的細胞，也會因為以下技術原因導致觀測到的 Read Counts (基因計數) 不同。標準化的核心任務就是校正這些誤差，確保後續分析的準確性。請點擊或懸停卡片以了解各項技術變異的細節。
+          </p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div class="bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-shadow duration-300 border-t-4 border-blue-400">
+            <div class="text-4xl mb-4">📊</div>
+            <h3 class="text-xl font-bold mb-2">定序深度</h3>
+            <p class="text-sm text-slate-600 font-semibold mb-2">(Sequencing Depth)</p>
+            <p class="text-slate-700">不同細胞在測序儀上獲得的總 Reads 數不同，導致整體信號強度的基線差異。</p>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-shadow duration-300 border-t-4 border-teal-400">
+            <div class="text-4xl mb-4">🧲</div>
+            <h3 class="text-xl font-bold mb-2">捕獲效率</h3>
+            <p class="text-sm text-slate-600 font-semibold mb-2">(Capture Efficiency)</p>
+            <p class="text-slate-700">不同細胞在逆轉錄成 cDNA 或文庫備製過程中的效率存在隨機差異，並非每個 RNA 分子都能被成功捕獲。</p>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-shadow duration-300 border-t-4 border-cyan-400">
+            <div class="text-4xl mb-4">💧</div>
+            <h3 class="text-xl font-bold mb-2">液滴大小</h3>
+            <p class="text-sm text-slate-600 font-semibold mb-2">(Droplet Size)</p>
+            <p class="text-slate-700">在 10x Genomics 等基於微流控的技術中，每個液滴 (Droplet) 包含的試劑量可能有微小差異，影響反應效率。</p>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-shadow duration-300 border-t-4 border-indigo-400">
+            <div class="text-4xl mb-4">🧬</div>
+            <h3 class="text-xl font-bold mb-2">RNA 含量差異</h3>
+            <p class="text-sm text-slate-600 font-semibold mb-2">(RNA Content)</p>
+            <p class="text-slate-700">不同大小或類型的細胞（如靜止的淋巴細胞 vs. 活躍分裂的腫瘤細胞）本身攜帶的總體 RNA 絕對量就不同。</p>
+            </div>
+            </div>
+            </section>
+            
+            <section id="methods-evolution" class="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
+            <div class="mb-8">
+            <h2 class="text-3xl font-bold text-slate-800 mb-4 border-b-4 border-indigo-500 pb-2 inline-block">2. 標準化演算法的演進與數據分佈</h2>
+            <p class="text-lg text-slate-600 leading-relaxed mb-6">
+            本區塊展示不同標準化方法如何改變數據的數學分布。單細胞數據極度稀疏（充滿 0），傳統的縮放方法逐漸顯露不足，促使了基於模型的進階演算法誕生。點擊下方按鈕，觀察圖表中數據分佈（模擬概念）的變化，這有助於直觀理解各方法的數學特性。
+          </p>
+            
+            <div class="flex flex-wrap gap-4 mb-6" id="chart-controls">
+            <button data-method="raw" class="px-6 py-2 rounded-full font-semibold bg-slate-200 text-slate-700 hover:bg-slate-300 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500">原始數據 (Raw)</button>
+            <button data-method="lognorm" class="px-6 py-2 rounded-full font-semibold bg-indigo-600 text-white hover:bg-indigo-700 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-md">LogNormalize</button>
+            <button data-method="scran" class="px-6 py-2 rounded-full font-semibold bg-slate-200 text-slate-700 hover:bg-slate-300 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500">Scran (Pooling)</button>
+            <button data-method="sctransform" class="px-6 py-2 rounded-full font-semibold bg-slate-200 text-slate-700 hover:bg-slate-300 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500">SCTransform</button>
+            </div>
+            
+            <div id="method-description" class="p-6 bg-slate-50 rounded-lg border border-slate-200 mb-6 min-h-[140px]">
+            <h3 class="text-xl font-bold text-indigo-900 mb-2" id="desc-title">LogNormalize (Seurat 默認方法)</h3>
+            <p class="text-slate-700 mb-2" id="desc-content">這是最常用的基礎方法。計算邏輯：將每個細胞的基因計數除以該細胞的總計數 (Scaling)，乘以一個比例因子通常為 10,000 (Multiply)，最後進行 log(x + 1) 轉換。</p>
+            <div class="flex gap-4 text-sm mt-3 pt-3 border-t border-slate-200">
+            <span class="text-emerald-700 bg-emerald-100 px-2 py-1 rounded"><strong>優點：</strong> <span id="desc-pros">簡單快速，能壓縮高表達基因的動態範圍。</span></span>
+            <span class="text-rose-700 bg-rose-100 px-2 py-1 rounded"><strong>缺點：</strong> <span id="desc-cons">無法完全處理單細胞數據中常見的「過度離散」（Over-dispersion）問題。</span></span>
+            </div>
+            </div>
+            </div>
+            
+            <div class="chart-container">
+            <canvas id="distributionChart"></canvas>
+            </div>
+            </section>
+            
+            <section id="comparison-matrix">
+            <div class="mb-8">
+            <h2 class="text-3xl font-bold text-slate-800 mb-4 border-b-4 border-indigo-500 pb-2 inline-block">3. 關鍵步驟與特性比較矩陣</h2>
+            <p class="text-lg text-slate-600 leading-relaxed">
+            本表格對比了三種主要標準化方法的核心邏輯與適用場景。您可以根據實驗設計（如細胞異質性高低、樣本規模）和計算資源，參考此矩陣選擇最適合的處理方式。
+          </p>
+            </div>
+            
+            <div class="overflow-x-auto rounded-xl shadow-sm border border-slate-200">
+            <table class="w-full text-left border-collapse bg-white">
+            <thead>
+            <tr class="bg-indigo-50 text-indigo-900">
+            <th class="p-4 border-b border-indigo-100 font-bold w-1/4">特性</th>
+            <th class="p-4 border-b border-indigo-100 font-bold w-1/4">LogNormalize</th>
+            <th class="p-4 border-b border-indigo-100 font-bold w-1/4">Scran (Deconvolution)</th>
+            <th class="p-4 border-b border-indigo-100 font-bold w-1/4">SCTransform</th>
+            </tr>
+            </thead>
+            <tbody class="text-slate-700">
+            <tr class="hover:bg-slate-50 transition-colors">
+            <td class="p-4 border-b border-slate-100 font-semibold bg-slate-50">核心邏輯</td>
+            <td class="p-4 border-b border-slate-100">線性縮放 + 對數轉換</td>
+            <td class="p-4 border-b border-slate-100">基於細胞池 (Pool) 的解卷積</td>
+            <td class="p-4 border-b border-slate-100 text-indigo-700 font-medium">正則化負二項回歸殘差</td>
+            </tr>
+            <tr class="hover:bg-slate-50 transition-colors">
+            <td class="p-4 border-b border-slate-100 font-semibold bg-slate-50">計算速度</td>
+            <td class="p-4 border-b border-slate-100"><span class="inline-block px-2 py-1 bg-green-100 text-green-800 rounded text-xs font-bold">極快</span></td>
+            <td class="p-4 border-b border-slate-100"><span class="inline-block px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs font-bold">中等</span></td>
+            <td class="p-4 border-b border-slate-100"><span class="inline-block px-2 py-1 bg-orange-100 text-orange-800 rounded text-xs font-bold">較慢 (需建模)</span></td>
+            </tr>
+            <tr class="hover:bg-slate-50 transition-colors">
+            <td class="p-4 border-b border-slate-100 font-semibold bg-slate-50">數據分布</td>
+            <td class="p-4 border-b border-slate-100">壓縮長尾分布</td>
+            <td class="p-4 border-b border-slate-100">保持線性關係</td>
+            <td class="p-4 border-b border-slate-100">中心化且單位化</td>
+            </tr>
+            <tr class="hover:bg-slate-50 transition-colors">
+            <td class="p-4 font-semibold bg-slate-50">適用場景與評價</td>
+            <td class="p-4">快速探索、簡單數據結構</td>
+            <td class="p-4">處理細胞間 RNA 總含量差異極大的數據</td>
+            <td class="p-4 text-indigo-900 font-bold bg-indigo-50/50">目前的主流標準，效果最穩健，特徵選擇極佳</td>
+            </tr>
+            </tbody>
+            </table>
+            </div>
+            </section>
+            
+            <section id="workflow-faq" class="grid grid-cols-1 lg:grid-cols-2 gap-12">
+            
+            <div>
+            <h2 class="text-3xl font-bold text-slate-800 mb-6 border-b-4 border-indigo-500 pb-2 inline-block">4. 建議的標準化工作流</h2>
+            <p class="text-slate-600 mb-8">
+            針對使用 R 語言 Seurat 套件的分析者，以下是目前公認能提供最乾淨、生物學特徵最明顯結果的標準路徑。此工作流整合了過濾、建模與降維。
+          </p>
+            
+            <div class="relative border-l-4 border-indigo-200 ml-6 space-y-8 pb-4">
+            <div class="relative pl-8">
+            <div class="absolute -left-[22px] top-0 step-circle ring-4 ring-white shadow-sm">1</div>
+            <h3 class="text-xl font-bold text-indigo-900 mb-2">初步過濾 (Quality Control)</h3>
+            <p class="text-slate-700 bg-white p-4 rounded-lg shadow-sm border border-slate-100">
+            除去線粒體比例過高 (可能為死細胞或破裂細胞) 或總基因數過少 (空液滴或低品質細胞) 的無效數據。
+          </p>
+            </div>
+            <div class="relative pl-8">
+            <div class="absolute -left-[22px] top-0 step-circle ring-4 ring-white shadow-sm">2</div>
+            <h3 class="text-xl font-bold text-indigo-900 mb-2">執行 SCTransform</h3>
+            <p class="text-slate-700 bg-white p-4 rounded-lg shadow-sm border border-slate-100 mb-2">
+            利用負二項回歸模型過濾技術雜訊，不需要人為設定 Scaling factor。
+          </p>
+            <code class="block bg-slate-800 text-green-400 p-3 rounded text-sm font-mono overflow-x-auto">
+            SCTransform(object, vars.to.regress = "percent.mt")
+          </code>
+            </div>
+            <div class="relative pl-8">
+            <div class="absolute -left-[22px] top-0 step-circle ring-4 ring-white shadow-sm">3</div>
+            <h3 class="text-xl font-bold text-indigo-900 mb-2">降維與聚類</h3>
+            <p class="text-slate-700 bg-white p-4 rounded-lg shadow-sm border border-slate-100 mb-2">
+            利用 SCTransform 產生的 Pearson Residuals 直接進行主成分分析與細胞分群。
+          </p>
+            <code class="block bg-slate-800 text-green-400 p-3 rounded text-sm font-mono overflow-x-auto">
+            RunPCA(object) %>% FindNeighbors()
+          </code>
+            </div>
+            </div>
+            </div>
+            
+            <div>
+            <h2 class="text-3xl font-bold text-slate-800 mb-6 border-b-4 border-indigo-500 pb-2 inline-block">5. 常見問題與注意事項</h2>
+            <p class="text-slate-600 mb-8">
+            在解讀標準化後的數據時，常會遇到一些觀念上的混淆。展開下方問題以了解分析時必須避免的陷阱。
+          </p>
+            
+            <div class="space-y-4">
+            <details class="group bg-white rounded-lg shadow-sm border border-slate-200 [&_summary::-webkit-details-marker]:hidden">
+            <summary class="flex items-center justify-between cursor-pointer p-5 font-semibold text-slate-800 hover:text-indigo-600 transition-colors">
+            <span>Normalization 和 Scaling 是一樣的嗎？</span>
+            <span class="transition group-open:rotate-180 text-indigo-500">▼</span>
+            </summary>
+            <div class="p-5 pt-0 text-slate-600 border-t border-slate-100 mt-2 leading-relaxed">
+            <ul class="list-disc pl-5 space-y-2">
+            <li><strong class="text-slate-800">Normalization (標準化):</strong> 通常指處理定序深度的差異，讓不同細胞的表達量基線一致。</li>
+            <li><strong class="text-slate-800">Scaling (縮放):</strong>（如 Seurat 中的 `ScaleData`）是指將基因表達量調整為平均值 0、方差 1 (Z-score 轉換)。主要是為了給 PCA 降維使用，確保高表達基因不會主導主成分的計算。</li>
+            </ul>
+            </div>
+            </details>
+            
+            <details class="group bg-white rounded-lg shadow-sm border border-slate-200 [&_summary::-webkit-details-marker]:hidden">
+            <summary class="flex items-center justify-between cursor-pointer p-5 font-semibold text-slate-800 hover:text-indigo-600 transition-colors">
+            <span>標準化後的數值可以絕對信任嗎？</span>
+            <span class="transition group-open:rotate-180 text-indigo-500">▼</span>
+            </summary>
+            <div class="p-5 pt-0 text-slate-600 border-t border-slate-100 mt-2 leading-relaxed">
+            <strong>請勿過度解讀！</strong> 所有的標準化本質上都是數學模擬與推斷。特別是針對極端低表達的基因，在經過對數轉換或模型擬合後，可能會產生假陽性的信號。始終需要結合生物學背景進行驗證。
+          </div>
+            </details>
+            
+            <details class="group bg-white rounded-lg shadow-sm border border-slate-200 [&_summary::-webkit-details-marker]:hidden">
+            <summary class="flex items-center justify-between cursor-pointer p-5 font-semibold text-slate-800 hover:text-indigo-600 transition-colors">
+            <span>標準化能解決批次效應 (Batch Effect) 嗎？</span>
+            <span class="transition group-open:rotate-180 text-indigo-500">▼</span>
+            </summary>
+            <div class="p-5 pt-0 text-slate-600 border-t border-slate-100 mt-2 leading-relaxed">
+            <strong>不能。</strong> 標準化主要是處理單個樣本內的技術差異。如果您的數據來自不同的實驗批次、不同的測序時間或不同的人員操作，標準化無法消除這些系統性偏差。在標準化之後，仍必須進行專門的 <strong>數據整合 (Integration/Batch Correction)</strong> 步驟，例如使用 Harmony, RPCA 或 scVI 演算法。
+          </div>
+            </details>
+            </div>
+            </div>
+            </section>
+            
+            </main>
+            
+            <footer class="bg-slate-900 text-slate-400 py-8 mt-12 text-center text-sm">
+            <p>基於 Source Report: 「單細胞定序數據標準化 (Normalization) 詳解」 建構之互動化儀表板</p>
+            </footer>
+            
+            <script>
+            document.addEventListener('DOMContentLoaded', () => {
+              
+              const methodInfo = {
+                'raw': {
+                  title: '原始數據 (Raw Counts)',
+                  content: '未經處理的測序計數。由於 Dropout 現象，數據極度稀疏（包含大量的 0），且呈現明顯的長尾分布（少數基因表達量極高）。',
+                  pros: '保留最原始的觀測值。',
+                  cons: '無法比較不同細胞的表達量，深受定序深度影響。'
+                },
+                'lognorm': {
+                  title: 'LogNormalize (Seurat 默認方法)',
+                  content: '計算邏輯：將每個細胞的基因計數除以該細胞的總計數 (Scaling)，乘以一個比例因子通常為 10,000 (Multiply)，最後進行 log(x + 1) 轉換。',
+                  pros: '簡單快速，對數轉換能有效壓縮高表達基因的動態範圍。',
+                  cons: '無法完全處理單細胞數據中常見的「過度離散」（Over-dispersion）問題。'
+                },
+                'scran': {
+                  title: 'Scran (Pooling-based Normalization)',
+                  content: '考慮到單細胞數據中 0 太多，直接計算每個細胞的 Size Factor 不準確。Scran 先將相似的細胞聚集成群 (Pool)，在群體層面計算 Scaling factor，再解卷積 (Deconvolve) 回單個細胞。',
+                  pros: '當細胞群體之間總 RNA 含量有顯著差異時，通常比 LogNormalize 更準確。',
+                  cons: '計算較複雜，速度為中等。'
+                },
+                'sctransform': {
+                  title: 'SCTransform (基於模型的標準化)',
+                  content: '使用正則化負二項回歸 (Regularized Negative Binomial Regression)。將定序深度視為協變量進行建模，計算 Pearson 殘差，並將殘差作為標準化後的數據。',
+                  pros: '能有效過濾掉技術雜訊，同時保留生物學異質性。不需要設定 Scaling factor，特徵選擇表現極佳。',
+                  cons: '計算速度較慢，需要進行統計建模。'
+                }
+              };
+              
+              const generateMockData = (type) => {
+                const labels = Array.from({length: 100}, (_, i) => i);
+                let data = [];
+                
+                if (type === 'raw') {
+                  for(let i=0; i<100; i++) {
+                    data.push(i < 10 ? 1000 * Math.pow(0.6, i) : 5 * Math.random());
+                  }
+                } else if (type === 'lognorm' || type === 'scran') {
+                  for(let i=0; i<100; i++) {
+                    data.push(i < 30 ? 100 * Math.pow(0.85, i) : 2 * Math.random());
+                  }
+                } else if (type === 'sctransform') {
+                  for(let i=0; i<100; i++) {
+                    let x = (i - 50) / 10;
+                    data.push(30 * Math.exp(-(x*x)/2) + (Math.random()*5 - 2.5));
+                  }
+                }
+                return { labels, data };
+              };
+              
+              const chartConfigs = {
+                'raw': { data: generateMockData('raw'), color: 'rgb(148, 163, 184)', bgColor: 'rgba(148, 163, 184, 0.2)', label: '表達量頻率分佈 (長尾)' },
+                'lognorm': { data: generateMockData('lognorm'), color: 'rgb(79, 70, 229)', bgColor: 'rgba(79, 70, 229, 0.2)', label: '表達量頻率分佈 (壓縮)' },
+                'scran': { data: generateMockData('scran'), color: 'rgb(13, 148, 136)', bgColor: 'rgba(13, 148, 136, 0.2)', label: '表達量頻率分佈 (解卷積)' },
+                'sctransform': { data: generateMockData('sctransform'), color: 'rgb(225, 29, 72)', bgColor: 'rgba(225, 29, 72, 0.2)', label: 'Pearson 殘差分佈 (中心化)' }
+              };
+              
+              const ctx = document.getElementById('distributionChart').getContext('2d');
+              let currentChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                  labels: chartConfigs['lognorm'].data.labels,
+                  datasets: [{
+                    label: chartConfigs['lognorm'].label,
+                    data: chartConfigs['lognorm'].data.data,
+                    borderColor: chartConfigs['lognorm'].color,
+                    backgroundColor: chartConfigs['lognorm'].bgColor,
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 0
+                  }]
+                },
+                options: {
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: { position: 'top' },
+                    tooltip: { enabled: false }
+                  },
+                  scales: {
+                    x: { display: false, title: { display: true, text: '基因表達值 / 殘差' } },
+                    y: { display: false, title: { display: true, text: '頻率 (基因數量)' } }
+                  },
+                  interaction: { mode: 'index', intersect: false },
+                }
+              });
+              
+              const buttons = document.querySelectorAll('#chart-controls button');
+              const titleEl = document.getElementById('desc-title');
+              const contentEl = document.getElementById('desc-content');
+              const prosEl = document.getElementById('desc-pros');
+              const consEl = document.getElementById('desc-cons');
+              
+              buttons.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                  const method = e.target.getAttribute('data-method');
+                  
+                  buttons.forEach(b => {
+                    b.classList.remove('bg-indigo-600', 'text-white', 'shadow-md');
+                    b.classList.add('bg-slate-200', 'text-slate-700');
+                  });
+                  
+                  e.target.classList.remove('bg-slate-200', 'text-slate-700');
+                  e.target.classList.add('bg-indigo-600', 'text-white', 'shadow-md');
+                  
+                  const info = methodInfo[method];
+                  titleEl.textContent = info.title;
+                  contentEl.textContent = info.content;
+                  prosEl.textContent = info.pros;
+                  consEl.textContent = info.cons;
+                  
+                  const config = chartConfigs[method];
+                  currentChart.data.datasets[0].label = config.label;
+                  currentChart.data.datasets[0].data = config.data.data;
+                  currentChart.data.datasets[0].borderColor = config.color;
+                  currentChart.data.datasets[0].backgroundColor = config.bgColor;
+                  currentChart.update();
+                });
+              });
+            });
+          </script>
+            </body>
+            </html>
