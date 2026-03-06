@@ -27,250 +27,131 @@ html_content = r'''<!DOCTYPE html>
     }
   </style>
 </head>
+
 <body class="bg-slate-50 text-slate-800 antialiased">
-  <div class="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.12),_transparent_35%),radial-gradient(circle_at_top_right,_rgba(14,165,233,0.10),_transparent_30%)]">
-    <header class="sticky top-0 z-20 border-b border-slate-200/70 glass">
-      <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <div class="w-11 h-11 rounded-2xl bg-blue-600 text-white flex items-center justify-center text-2xl shadow-lg">🧬</div>
-          <div>
-            <div class="text-sm text-slate-500 font-medium">Charlene's learning site</div>
-            <h1 class="text-lg md:text-xl font-bold">scRNA-seq Interactive Tutorial</h1>
-          </div>
-        </div>
-        <a href="#steps" class="hidden md:inline-flex px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition">開始瀏覽</a>
+<div class="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.12),_transparent_35%),radial-gradient(circle_at_top_right,_rgba(14,165,233,0.10),_transparent_30%)]">
+
+<header class="sticky top-0 z-20 border-b border-slate-200/70 glass">
+  <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-11 h-11 rounded-2xl bg-blue-600 text-white flex items-center justify-center text-2xl shadow-lg">🧬</div>
+      <div>
+        <div class="text-sm text-slate-500 font-medium">Charlene's learning site</div>
+        <h1 class="text-lg md:text-xl font-bold">scRNA-seq Interactive Tutorial</h1>
       </div>
-    </header>
-
-    <main>
-      <section class="max-w-7xl mx-auto px-6 pt-14 pb-10">
-        <div class="grid lg:grid-cols-2 gap-10 items-center">
-          <div>
-            <div class="inline-flex items-center gap-2 rounded-full bg-blue-100 text-blue-800 px-4 py-1.5 text-sm font-semibold mb-5">
-              <span>Interactive hub</span>
-              <span class="text-blue-300">•</span>
-              <span>scRNA-seq workflow overview</span>
-            </div>
-            <h2 class="text-4xl md:text-5xl font-extrabold leading-tight tracking-tight mb-5">
-              互動式
-              <span class="gradient-text"> scRNA-seq 分析流程</span>
-            </h2>
-            <p class="text-lg text-slate-600 leading-8 mb-7">
-              這個首頁作為總覽頁，簡要介紹單細胞 RNA 定序分析的主要步驟，並連結到各步驟的獨立教學頁面，例如 QC、Normalization、Scaling、PCA、Clustering、UMAP 與下游分析。適合作為 GitHub Pages 的入口頁面。
-            </p>
-            <div class="flex flex-wrap gap-3">
-              <a href="#steps" class="px-5 py-3 rounded-2xl bg-blue-600 text-white font-semibold shadow hover:bg-blue-700 transition">查看教學步驟</a>
-              <a href="#structure" class="px-5 py-3 rounded-2xl border border-slate-300 bg-white text-slate-700 font-semibold hover:bg-slate-100 transition">檔案架構建議</a>
-            </div>
-          </div>
-
-          <div class="bg-white rounded-3xl shadow-xl border border-slate-200 p-6 md:p-8">
-            <h3 class="text-xl font-bold mb-5">Workflow at a glance</h3>
-            <div class="grid grid-cols-2 gap-4 text-sm">
-              <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
-                <div class="text-2xl mb-2">🧪</div>
-                <div class="font-bold">QC</div>
-                <div class="text-slate-500 mt-1">過濾低品質細胞與異常值</div>
-              </div>
-              <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
-                <div class="text-2xl mb-2">⚖️</div>
-                <div class="font-bold">Normalization</div>
-                <div class="text-slate-500 mt-1">校正測序深度差異</div>
-              </div>
-              <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
-                <div class="text-2xl mb-2">📏</div>
-                <div class="font-bold">Scaling</div>
-                <div class="text-slate-500 mt-1">標準化基因尺度與變異</div>
-              </div>
-              <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
-                <div class="text-2xl mb-2">📉</div>
-                <div class="font-bold">PCA</div>
-                <div class="text-slate-500 mt-1">提取主要變異訊號</div>
-              </div>
-              <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
-                <div class="text-2xl mb-2">🧩</div>
-                <div class="font-bold">Clustering</div>
-                <div class="text-slate-500 mt-1">辨識細胞群集</div>
-              </div>
-              <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
-                <div class="text-2xl mb-2">🗺️</div>
-                <div class="font-bold">UMAP</div>
-                <div class="text-slate-500 mt-1">視覺化高維資料結構</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="steps" class="max-w-7xl mx-auto px-6 py-10">
-        <div class="flex items-end justify-between gap-4 mb-8">
-          <div>
-            <p class="text-sm font-semibold uppercase tracking-[0.18em] text-blue-600">Tutorial Map</p>
-            <h3 class="text-3xl font-extrabold mt-2">各步驟教學連結</h3>
-          </div>
-          <p class="hidden md:block text-slate-500 text-sm">每張卡片都可直接連到對應的 html 頁面</p>
-        </div>
-
-        <div class="grid sm:grid-cols-2 xl:grid-cols-4 gap-6">
-          <a class="step-card block rounded-3xl bg-white border border-slate-200 p-6 shadow-sm transition duration-200" href="qc.html">
-            <div class="text-3xl mb-4">🧪</div>
-            <div class="flex items-center justify-between gap-3">
-              <h4 class="font-bold text-lg">QC</h4>
-              <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-rose-100 text-rose-700">Step 1</span>
-            </div>
-            <p class="text-slate-600 text-sm leading-6 mt-3">檢查 nFeature、nCount、percent.mt，移除低品質細胞、doublets 與潛在 outliers。</p>
-          </a>
-
-          <a class="step-card block rounded-3xl bg-white border border-slate-200 p-6 shadow-sm transition duration-200" href="normalization.html">
-            <div class="text-3xl mb-4">⚖️</div>
-            <div class="flex items-center justify-between gap-3">
-              <h4 class="font-bold text-lg">Normalization</h4>
-              <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">Step 2</span>
-            </div>
-            <p class="text-slate-600 text-sm leading-6 mt-3">校正細胞間測序深度差異，讓不同細胞之間的表達值更可比較。</p>
-          </a>
-
-          <a class="step-card block rounded-3xl bg-white border border-slate-200 p-6 shadow-sm transition duration-200" href="variable-features.html">
-            <div class="text-3xl mb-4">✨</div>
-            <div class="flex items-center justify-between gap-3">
-              <h4 class="font-bold text-lg">Variable Features</h4>
-              <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-lime-100 text-lime-700">Step 3</span>
-            </div>
-            <p class="text-slate-600 text-sm leading-6 mt-3">挑選具有高生物學變異的基因，作為 PCA 與聚類分析的主要輸入特徵。</p>
-          </a>
-
-          <a class="step-card block rounded-3xl bg-white border border-slate-200 p-6 shadow-sm transition duration-200" href="scaling.html">
-            <div class="text-3xl mb-4">📏</div>
-            <div class="flex items-center justify-between gap-3">
-              <h4 class="font-bold text-lg">Scaling</h4>
-              <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-cyan-100 text-cyan-700">Step 4</span>
-            </div>
-            <p class="text-slate-600 text-sm leading-6 mt-3">進行 Z-score 標準化，讓基因在相近尺度下進入 PCA 等下游分析。</p>
-          </a>
-
-          <a class="step-card block rounded-3xl bg-white border border-slate-200 p-6 shadow-sm transition duration-200" href="pca.html">
-            <div class="text-3xl mb-4">📉</div>
-            <div class="flex items-center justify-between gap-3">
-              <h4 class="font-bold text-lg">PCA</h4>
-              <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-sky-100 text-sky-700">Step 5</span>
-            </div>
-            <p class="text-slate-600 text-sm leading-6 mt-3">將高維基因表達資料壓縮成主要主成分，保留關鍵變異與降低噪音。</p>
-          </a>
-
-          <a class="step-card block rounded-3xl bg-white border border-slate-200 p-6 shadow-sm transition duration-200" href="clustering.html">
-            <div class="text-3xl mb-4">🧩</div>
-            <div class="flex items-center justify-between gap-3">
-              <h4 class="font-bold text-lg">Clustering</h4>
-              <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-violet-100 text-violet-700">Step 6</span>
-            </div>
-            <p class="text-slate-600 text-sm leading-6 mt-3">依據 PCA 空間中的近鄰關係建立圖網路，辨識細胞族群與亞群。</p>
-          </a>
-
-          <a class="step-card block rounded-3xl bg-white border border-slate-200 p-6 shadow-sm transition duration-200" href="umap.html">
-            <div class="text-3xl mb-4">🗺️</div>
-            <div class="flex items-center justify-between gap-3">
-              <h4 class="font-bold text-lg">UMAP</h4>
-              <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-fuchsia-100 text-fuchsia-700">Step 7</span>
-            </div>
-            <p class="text-slate-600 text-sm leading-6 mt-3">將高維資料投影到 2D 空間，便於觀察細胞群間的相對關係與分布。</p>
-          </a>
-
-          <a class="step-card block rounded-3xl bg-white border border-slate-200 p-6 shadow-sm transition duration-200" href="annotation.html">
-            <div class="text-3xl mb-4">🏷️</div>
-            <div class="flex items-center justify-between gap-3">
-              <h4 class="font-bold text-lg">Annotation</h4>
-              <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700">Step 8</span>
-            </div>
-            <p class="text-slate-600 text-sm leading-6 mt-3">根據 marker genes、生物學背景與文獻資訊，為 cluster 指定細胞類型名稱。</p>
-          </a>
-
-          <a class="step-card block rounded-3xl bg-white border border-slate-200 p-6 shadow-sm transition duration-200" href="differential-expression.html">
-            <div class="text-3xl mb-4">🧾</div>
-            <div class="flex items-center justify-between gap-3">
-              <h4 class="font-bold text-lg">Differential Expression</h4>
-              <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-orange-100 text-orange-700">Step 9</span>
-            </div>
-            <p class="text-slate-600 text-sm leading-6 mt-3">比較不同 cluster 或 condition 的基因表達差異，找出 markers 與疾病訊號。</p>
-          </a>
-
-          <a class="step-card block rounded-3xl bg-white border border-slate-200 p-6 shadow-sm transition duration-200" href="integration.html">
-            <div class="text-3xl mb-4">🔗</div>
-            <div class="flex items-center justify-between gap-3">
-              <h4 class="font-bold text-lg">Integration</h4>
-              <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-teal-100 text-teal-700">Advanced</span>
-            </div>
-            <p class="text-slate-600 text-sm leading-6 mt-3">整合多樣本或多批次資料，降低 batch effect 並保留真實生物學差異。</p>
-          </a>
-
-          <a class="step-card block rounded-3xl bg-white border border-slate-200 p-6 shadow-sm transition duration-200" href="cellchat.html">
-            <div class="text-3xl mb-4">💬</div>
-            <div class="flex items-center justify-between gap-3">
-              <h4 class="font-bold text-lg">Cell-Cell Communication</h4>
-              <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-700">Advanced</span>
-            </div>
-            <p class="text-slate-600 text-sm leading-6 mt-3">分析 ligand-receptor interactions，探索細胞間訊號傳遞與微環境調控。</p>
-          </a>
-
-          <a class="step-card block rounded-3xl bg-white border border-slate-200 p-6 shadow-sm transition duration-200" href="trajectory.html">
-            <div class="text-3xl mb-4">🛤️</div>
-            <div class="flex items-center justify-between gap-3">
-              <h4 class="font-bold text-lg">Trajectory / Pseudotime</h4>
-              <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-pink-100 text-pink-700">Advanced</span>
-            </div>
-            <p class="text-slate-600 text-sm leading-6 mt-3">推估細胞狀態轉變與發育路徑，適合研究 differentiation 或 disease progression。</p>
-          </a>
-        </div>
-      </section>
-
-      <section class="max-w-7xl mx-auto px-6 py-12">
-        <div class="grid lg:grid-cols-2 gap-8">
-          <div class="rounded-3xl bg-white border border-slate-200 p-7 shadow-sm">
-            <h3 class="text-2xl font-bold mb-4">建議使用方式</h3>
-            <ol class="space-y-4 text-slate-600 leading-7 list-decimal pl-5">
-              <li>把這個頁面存成網站首頁，例如 <code class="bg-slate-100 px-2 py-0.5 rounded">index.html</code>。</li>
-              <li>每個教學步驟再建立一個獨立 html，例如 <code class="bg-slate-100 px-2 py-0.5 rounded">qc.html</code>、<code class="bg-slate-100 px-2 py-0.5 rounded">normalization.html</code>。</li>
-              <li>所有 html 放在同一層資料夾時，上面的連結可直接使用。</li>
-              <li>若要分資料夾管理，也可以把連結改成例如 <code class="bg-slate-100 px-2 py-0.5 rounded">qc/index.html</code>。</li>
-            </ol>
-          </div>
-
-          <div id="structure" class="rounded-3xl bg-slate-900 text-slate-100 p-7 shadow-xl overflow-x-auto">
-            <h3 class="text-2xl font-bold mb-4">建議檔案架構</h3>
-            <pre class="text-sm leading-7 text-slate-200"><code>scrna-interactive-tutorial-ch/
-├── index.html
-├── qc.html
-├── normalization.html
-├── variable-features.html
-├── scaling.html
-├── pca.html
-├── clustering.html
-├── umap.html
-├── annotation.html
-├── differential-expression.html
-├── integration.html
-├── cellchat.html
-├── trajectory.html
-├── css/
-│   └── style.css
-└── js/
-    └── app.js</code></pre>
-          </div>
-        </div>
-      </section>
-    </main>
-
-    <footer class="border-t border-slate-200 mt-10">
-      <div class="max-w-7xl mx-auto px-6 py-8 flex flex-col md:flex-row gap-3 md:items-center md:justify-between text-sm text-slate-500">
-        <p>© Charlene — scRNA-seq Interactive Tutorial Hub</p>
-        <p>可直接作為 GitHub Pages 首頁使用</p>
-      </div>
-    </footer>
+    </div>
+    <a href="#steps" class="hidden md:inline-flex px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition">開始瀏覽</a>
   </div>
+</header>
+
+<main>
+
+<section class="max-w-7xl mx-auto px-6 pt-14 pb-10">
+<div class="grid lg:grid-cols-2 gap-10 items-center">
+
+<div>
+<div class="inline-flex items-center gap-2 rounded-full bg-blue-100 text-blue-800 px-4 py-1.5 text-sm font-semibold mb-5">
+<span>Interactive hub</span>
+<span class="text-blue-300">•</span>
+<span>scRNA-seq workflow overview</span>
+</div>
+
+<h2 class="text-4xl md:text-5xl font-extrabold leading-tight tracking-tight mb-5">
+互動式 <span class="gradient-text"> scRNA-seq 分析流程</span>
+</h2>
+
+<p class="text-lg text-slate-600 leading-8 mb-7">
+這個首頁作為總覽頁，簡要介紹單細胞 RNA 定序分析的主要步驟，並連結到各步驟的獨立教學頁面，例如 QC、Normalization、Scaling、PCA、Clustering、UMAP 與下游分析。
+</p>
+
+<a href="#steps" class="px-5 py-3 rounded-2xl bg-blue-600 text-white font-semibold shadow hover:bg-blue-700 transition">查看教學步驟</a>
+</div>
+
+<div class="bg-white rounded-3xl shadow-xl border border-slate-200 p-6 md:p-8">
+<h3 class="text-xl font-bold mb-5">Workflow at a glance</h3>
+
+<div class="grid grid-cols-2 gap-4 text-sm">
+
+<div class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+<div class="text-2xl mb-2">🧪</div>
+<div class="font-bold">QC</div>
+<div class="text-slate-500 mt-1">過濾低品質細胞</div>
+</div>
+
+<div class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+<div class="text-2xl mb-2">⚖️</div>
+<div class="font-bold">Normalization</div>
+<div class="text-slate-500 mt-1">校正測序深度</div>
+</div>
+
+<div class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+<div class="text-2xl mb-2">📏</div>
+<div class="font-bold">Scaling</div>
+<div class="text-slate-500 mt-1">標準化基因尺度</div>
+</div>
+
+<div class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+<div class="text-2xl mb-2">📉</div>
+<div class="font-bold">PCA</div>
+<div class="text-slate-500 mt-1">提取主要變異</div>
+</div>
+
+<div class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+<div class="text-2xl mb-2">🧩</div>
+<div class="font-bold">Clustering</div>
+<div class="text-slate-500 mt-1">辨識細胞群</div>
+</div>
+
+<div class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+<div class="text-2xl mb-2">🗺️</div>
+<div class="font-bold">UMAP</div>
+<div class="text-slate-500 mt-1">2D視覺化</div>
+</div>
+
+</div>
+</div>
+</div>
+</section>
+
+
+<section id="steps" class="max-w-7xl mx-auto px-6 py-10">
+<div class="grid sm:grid-cols-2 xl:grid-cols-4 gap-6">
+
+<a class="step-card block rounded-3xl bg-white border border-slate-200 p-6 shadow-sm transition duration-200" href="qc.html">
+<div class="text-3xl mb-4">🧪</div>
+<h4 class="font-bold text-lg">QC</h4>
+<p class="text-slate-600 text-sm mt-3">檢查 nFeature、nCount、percent.mt。</p>
+</a>
+
+<a class="step-card block rounded-3xl bg-white border border-slate-200 p-6 shadow-sm transition duration-200" href="normalization.html">
+<div class="text-3xl mb-4">⚖️</div>
+<h4 class="font-bold text-lg">Normalization</h4>
+<p class="text-slate-600 text-sm mt-3">校正細胞間測序深度差異。</p>
+</a>
+
+<a class="step-card block rounded-3xl bg-white border border-slate-200 p-6 shadow-sm transition duration-200" href="pca.html">
+<div class="text-3xl mb-4">📉</div>
+<h4 class="font-bold text-lg">PCA</h4>
+<p class="text-slate-600 text-sm mt-3">降維提取主要訊號。</p>
+</a>
+
+<a class="step-card block rounded-3xl bg-white border border-slate-200 p-6 shadow-sm transition duration-200" href="umap.html">
+<div class="text-3xl mb-4">🗺️</div>
+<h4 class="font-bold text-lg">UMAP</h4>
+<p class="text-slate-600 text-sm mt-3">2D 視覺化細胞分布。</p>
+</a>
+
+</div>
+</section>
+
+</main>
+
+<footer class="border-t border-slate-200 mt-10">
+<div class="max-w-7xl mx-auto px-6 py-8 text-sm text-slate-500">
+© Charlene — scRNA-seq Interactive Tutorial Hub
+</div>
+</footer>
+
+</div>
 </body>
 </html>'''
-
-path = "/mnt/data/index_scrna_tutorial_hub.html"
-with open(path, "w", encoding="utf-8") as f:
-    f.write(html_content)
-
-print(path)
