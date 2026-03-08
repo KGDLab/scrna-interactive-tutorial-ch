@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+  <html lang="zh-TW">
+    <head>
+    <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>scRNA-seq 品質管制 (QC) 互動解析指南</title>
+        
+        <!-- Tailwind CSS -->
+        <script src="https://cdn.tailwindcss.com"></script>
+          
+          <!-- Chart.js -->
+          <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+            
+            <!-- Chosen Palette: [Slate & Blue/Emerald/Rose] - A clean, scientific palette. Slate for neutral backgrounds, Blue for primary actions/data, Emerald for 'good/kept' cells, Rose for 'bad/filtered' cells. -->
+            
+            <!-- Application Structure Plan: [Dashboard Layout with Interactive Simulator] 
+          - Left Sidebar: Navigation for logical grouping (Introduction, Cell Metrics Simulator, Advanced Artifacts, Best Practices).
+          - Main Content Area: Scrollable sections.
+          - Key Feature: An interactive "QC Simulator" in the Cell Metrics section. Users adjust sliders (nFeature, MT%) to see real-time filtering on a mock scatter plot (nCount vs nFeature). This addresses the report's core message that QC is an iterative, visual process.
+         - Artifacts Section: Uses CSS-based conceptual diagrams to explain Doublets and Soup RNA without relying on external images or SVGs. -->
+         
+    <!-- Visualization & Content Choices: [
+         - Overview -> Contextual Text -> Introduce the purpose of QC.
+         - Cell-level Metrics -> Interactive Chart.js Scatter Plot -> Goal: Compare/Interact. Allows users to see the joint distribution of nFeature vs nCount and color them by MT% or Filter Status. Justification: Scatter plots are the industry standard for scRNA-seq QC.
+         - Doublets/Soup -> HTML/CSS shapes -> Goal: Inform/Organize. Visual representations of technical artifacts using pure CSS circles (no SVG constraint met).
+         - Threshold Strategies -> Comparison Grid -> Goal: Compare. Clear breakdown of Fixed vs Adaptive (MAD) approaches.
+         ] -->
+
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        
+        /* 嚴格控制圖表容器的大小與響應式 */
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 50vh;
+            max-height: 450px;
+            min-height: 300px;
+        }
+
+        /* 隱藏/美化捲軸 */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* 導覽列作用中樣式 */
+        .nav-item.active {
+            background-color: #eff6ff;
+            color: #1d4ed8;
+            border-right: 3px solid #1d4ed8;
+            font-weight: 600;
+        }
+
+        /* CSS 細胞示意圖 */
+        .cell-circle {
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.1);
+        }
+        .nucleus {
+            border-radius: 50%;
+            background-color: rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 flex h-screen overflow-hidden selection:bg-blue-200 selection:text-blue-900">
+
+    <!-- 左側邊欄導覽 (桌面版) -->
+    <aside class="hidden md:flex flex-col w-64 bg-white border-r border-slate-200 h-full flex-shrink-0 z-10 shadow-sm">
+        <div class="p-6 border-b border-slate-100">
+            <h1 class="text-xl font-bold text-slate-900 leading-tight">scRNA-seq QC<br><span class="text-blue-600 text-base font-medium">互動分析指南</span></h1>
+        </div>
+        <nav class="flex-1 overflow-y-auto py-4" id="sidebar-nav">
+            <a href="#intro" class="nav-item active block px-6 py-3 text-sm text-slate-600 hover:bg-slate-50 transition-colors">概覽與重要性</a>
+            <a href="#cell-metrics" class="nav-item block px-6 py-3 text-sm text-slate-600 hover:bg-slate-50 transition-colors">細胞層級指標 (互動模擬)</a>
+            <a href="#gene-metrics" class="nav-item block px-6 py-3 text-sm text-slate-600 hover:bg-slate-50 transition-colors">基因層級過濾</a>
+            <a href="#artifacts" class="nav-item block px-6 py-3 text-sm text-slate-600 hover:bg-slate-50 transition-colors">進階 QC：技術性假象</a>
+            <a href="#strategies" class="nav-item block px-6 py-3 text-sm text-slate-600 hover:bg-slate-50 transition-colors">閾值策略與最佳實踐</a>
+        </nav>
+        <div class="p-4 bg-slate-50 border-t border-slate-200 text-xs text-slate-400 text-center">
+            基於專家分析報告生成
+        </div>
+    </aside>
+
+    <!-- 行動版頂部導覽 -->
+    <div class="md:hidden fixed top-0 w-full bg-white border-b border-slate-200 z-20 shadow-sm">
+        <div class="px-4 py-3 flex justify-between items-center">
+            <h1 class="text-lg font-bold text-slate-900">scRNA-seq QC <span class="text-blue-600">指南</span></h1>
+            <select id="mobile-nav" class="bg-slate-50 border border-slate-200 text-sm rounded-md px-2 py-1 outline-none focus:border-blue-500">
+                <option value="#intro">概覽與重要性</option>
+                <option value="#cell-metrics">細胞層級指標</option>
+                <option value="#gene-metrics">基因層級過濾</option>
+                <option value="#artifacts">進階 QC (假象)</option>
+                <option value="#strategies">閾值策略</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- 主要內容區 -->
+    <main class="flex-1 h-full overflow-y-auto pt-16 md:pt-0 scroll-smooth" id="main-content">
+        <div class="max-w-5xl mx-auto p-6 md:p-10 lg:p-12 space-y-24 pb-32">
+
+            <!-- Section 1: 概覽 -->
+            <section id="intro" class="scroll-mt-8 md:scroll-mt-0">
+                <div class="max-w-3xl">
+                    <h2 class="text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight mb-4">單細胞 RNA 定序數據分析中的<br><span class="text-blue-600">品質管制 (QC)</span> 詳解</h2>
+                    <p class="text-lg text-slate-600 leading-relaxed mb-6">
+                        在 scRNA-seq 的數據分析流程中，<strong>品質管制 (Quality Control)</strong> 是極其關鍵的第一步。由於單細胞捕獲技術的限制和細胞本身的狀態差異，原始數據中會包含大量無用的雜訊（如死細胞、破裂液滴、雙細胞等）。
+                    </p>
+                    <div class="bg-amber-50 border-l-4 border-amber-400 p-4 rounded-r-lg">
+                        <p class="text-sm text-amber-800">
+                            <strong>為什麼這很重要？</strong> 如果沒有嚴格的 QC，這些低品質數據會嚴重干擾後續的降維、分群 (Clustering) 和差異表現基因分析，甚至導致得出完全錯誤的生物學結論。
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section 2: 細胞層級指標 (互動核心區) -->
+            <section id="cell-metrics" class="scroll-mt-20 md:scroll-mt-10">
+                <div class="mb-8">
+                    <h3 class="text-2xl font-bold text-slate-900 mb-2 border-b border-slate-200 pb-2">一、 細胞層級的 QC 核心指標</h3>
+                    <p class="text-slate-600 mb-6">細胞層級的過濾旨在剔除品質不良的「細胞條碼 (Cell Barcodes)」。以下提供一個互動模擬器，讓您體驗不同閾值設定對數據集的影響。<strong>請嘗試拖曳下方滑桿。</strong></p>
+                    
+                    <!-- 互動指標解釋卡片 -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+                            <h4 class="font-bold text-slate-800 text-lg mb-1">1. 基因數量 <span class="text-xs font-mono bg-slate-100 px-1 py-0.5 rounded text-slate-500">nFeature_RNA</span></h4>
+                            <p class="text-sm text-slate-600">單一細胞中檢測到的基因總數。<br>
+                                <span class="text-rose-500 font-medium">過低 (<200):</span> 細胞破裂或空液滴。<br>
+                                <span class="text-rose-500 font-medium">過高:</span> 暗示為雙細胞 (Doublets)。
+                            </p>
+                        </div>
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+                            <h4 class="font-bold text-slate-800 text-lg mb-1">2. 總 UMI 數量 <span class="text-xs font-mono bg-slate-100 px-1 py-0.5 rounded text-slate-500">nCount_RNA</span></h4>
+                            <p class="text-sm text-slate-600">測得的所有轉錄本分子總數。應與基因數量呈現高度正相關。<br>
+                                異常高低通常與空液滴或多細胞有關。
+                            </p>
+                        </div>
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow relative overflow-hidden">
+                            <div class="absolute top-0 right-0 w-2 h-full bg-rose-400"></div>
+                            <h4 class="font-bold text-slate-800 text-lg mb-1">3. 粒線體比例 <span class="text-xs font-mono bg-slate-100 px-1 py-0.5 rounded text-slate-500">MT%</span></h4>
+                            <p class="text-sm text-slate-600">判斷<strong>細胞死活/健康狀態</strong>的最重要指標。細胞破裂時 mRNA 流失，但粒線體 RNA 容易殘留。<br>
+                                常見閾值: <span class="font-semibold text-slate-800">大於 5%~20% 剔除</span>。
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- 互動模擬器 UI -->
+                    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                        <div class="bg-slate-50 px-6 py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                            <h4 class="font-bold text-slate-800 flex items-center">
+                                <span class="text-xl mr-2">📊</span> QC 散佈圖模擬器 (nCount vs nFeature)
+                            </h4>
+                            <!-- 狀態統計 -->
+                            <div class="flex gap-4 text-sm font-medium">
+                                <div class="px-3 py-1 bg-slate-200 rounded-full text-slate-700">總數: <span id="stat-total">1000</span></div>
+                                <div class="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full">保留: <span id="stat-kept">--</span></div>
+                                <div class="px-3 py-1 bg-rose-100 text-rose-700 rounded-full">剔除: <span id="stat-filtered">--</span></div>
+                            </div>
+                        </div>
+                        
+                        <div class="p-6 grid grid-cols-1 lg:grid-cols-4 gap-8">
+                            <!-- 控制面板 -->
+                            <div class="lg:col-span-1 space-y-6">
+                                <div>
+                                    <label class="flex justify-between text-sm font-semibold text-slate-700 mb-2">
+                                        最少基因數 (Min Feature)
+                                        <span id="val-min-gene" class="text-blue-600">200</span>
+                                    </label>
+                                    <input type="range" id="slider-min-gene" min="0" max="1000" step="50" value="200" class="w-full accent-blue-600">
+                                    <p class="text-xs text-slate-400 mt-1">過濾破裂細胞/空液滴</p>
+                                </div>
+                                <div>
+                                    <label class="flex justify-between text-sm font-semibold text-slate-700 mb-2">
+                                        最多基因數 (Max Feature)
+                                        <span id="val-max-gene" class="text-blue-600">4000</span>
+                                    </label>
+                                    <input type="range" id="slider-max-gene" min="1000" max="8000" step="100" value="4000" class="w-full accent-blue-600">
+                                    <p class="text-xs text-slate-400 mt-1">過濾潛在雙細胞</p>
+                                </div>
+                                <div class="pt-4 border-t border-slate-100">
+                                    <label class="flex justify-between text-sm font-semibold text-slate-700 mb-2">
+                                        最高粒線體比例 (Max MT%)
+                                        <span id="val-max-mt" class="text-rose-600">10%</span>
+                                    </label>
+                                    <input type="range" id="slider-max-mt" min="1" max="50" step="1" value="10" class="w-full accent-rose-500">
+                                    <p class="text-xs text-slate-400 mt-1">過濾死亡/垂死細胞</p>
+                                </div>
+                                <button id="btn-reset" class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors">
+                                    重置閾值
+                                </button>
+                            </div>
+
+                            <!-- 圖表容器 (強制遵守結構規範) -->
+                            <div class="lg:col-span-3">
+                                <div class="chart-container">
+                                    <canvas id="qcChart"></canvas>
+                                </div>
+                                <p class="text-center text-xs text-slate-400 mt-4">
+                                    X軸: 總 UMI (nCount_RNA) | Y軸: 基因數 (nFeature_RNA)<br>
+                                    <span class="inline-block w-3 h-3 bg-emerald-400 rounded-full mr-1 align-middle"></span> 綠色點代表通過目前閾值的「健康單細胞」。
+                                    <span class="inline-block w-3 h-3 bg-rose-400 rounded-full ml-3 mr-1 align-middle"></span> 紅色點代表被剔除的雜訊。
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section 3: 基因層級與其他輔助 -->
+            <section id="gene-metrics" class="scroll-mt-20 md:scroll-mt-10">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div>
+                        <h3 class="text-2xl font-bold text-slate-900 mb-4 border-b border-slate-200 pb-2">二、 基因層級的 QC</h3>
+                        <p class="text-slate-600 mb-4">
+                            除了過濾細胞，我們也需要過濾掉沒有分析價值的基因，以減少運算負擔和統計雜訊。
+                        </p>
+                        <div class="bg-blue-50 p-4 rounded-lg text-sm text-blue-900">
+                            <strong>極低表現基因過濾：</strong><br>
+                            通常會將「在少於 3 個細胞中表現的基因」剔除。因為這些基因極有可能是測序錯誤的產物，或者表現量低到無法在後續分析中提供任何統計顯著性。
+                        </div>
+                    </div>
+                    <div>
+                        <h3 class="text-2xl font-bold text-slate-900 mb-4 border-b border-slate-200 pb-2">其他輔助細胞指標</h3>
+                        <ul class="space-y-4">
+                            <li class="flex items-start">
+                                <span class="text-xl mr-3">🧬</span>
+                                <div>
+                                    <strong class="text-slate-800 block">核糖體基因比例 (Ribosomal Ratio)</strong>
+                                    <span class="text-sm text-slate-600">過低有時暗示細胞狀態不佳，但此指標不如粒線體通用 (通常針對 RPS/RPL 開頭基因)。</span>
+                                </div>
+                            </li>
+                            <li class="flex items-start">
+                                <span class="text-xl mr-3">🩸</span>
+                                <div>
+                                    <strong class="text-slate-800 block">紅血球基因比例 (Hemoglobin Ratio)</strong>
+                                    <span class="text-sm text-slate-600">針對血液或富含血管組織，若非專門研究紅血球，通常會過濾掉 HBA, HBB 表現過高的細胞。</span>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section 4: 進階假象 -->
+            <section id="artifacts" class="scroll-mt-20 md:scroll-mt-10">
+                <h3 class="text-2xl font-bold text-slate-900 mb-2 border-b border-slate-200 pb-2">三、 進階 QC：處理技術性假象 (Artifacts)</h3>
+                <p class="text-slate-600 mb-8">基本的閾值過濾無法解決所有問題。即使過濾了極端值，仍有難以辨識的假象混入數據。現代分析需加入以下進階步驟：</p>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Doublet 卡片 -->
+                    <div class="border border-slate-200 rounded-xl p-6 bg-white flex flex-col">
+                        <div class="flex items-center justify-between mb-4">
+                            <h4 class="text-lg font-bold text-slate-800">1. 雙細胞 (Doublets)</h4>
+                            <!-- CSS 圖形示意: 兩個細胞黏在一起 -->
+                            <div class="flex -space-x-2">
+                                <div class="cell-circle w-10 h-10 bg-blue-100 border border-blue-300"><div class="nucleus w-3 h-3"></div></div>
+                                <div class="cell-circle w-10 h-10 bg-indigo-100 border border-indigo-300"><div class="nucleus w-3 h-3"></div></div>
+                            </div>
+                        </div>
+                        <p class="text-sm text-slate-600 mb-4 flex-1">
+                            兩個細胞被包裹在同一個液滴中。它們會在 UMAP 分群上形成不真實的「過渡狀態」。簡單的 nCount/nFeature 上限無法完全剔除由兩個小細胞組成的 Doublets。
+                        </p>
+                        <div class="bg-slate-50 p-3 rounded text-sm">
+                            <strong class="text-slate-700">解決方案：</strong><br>
+                            使用演算法模擬雙細胞表現特徵，計算每個細胞的機率 (Doublet Score)。<br>
+                            <span class="text-xs text-blue-600 font-mono mt-1 block">常用工具: DoubletFinder, Scrublet, scDblFinder</span>
+                        </div>
+                    </div>
+
+                    <!-- Ambient RNA 卡片 -->
+                    <div class="border border-slate-200 rounded-xl p-6 bg-white flex flex-col">
+                        <div class="flex items-center justify-between mb-4">
+                            <h4 class="text-lg font-bold text-slate-800">2. 環境背景 RNA (Soup)</h4>
+                            <!-- CSS 圖形示意: 游離 RNA 在液滴內 -->
+                            <div class="cell-circle w-12 h-12 bg-slate-50 border border-slate-300 relative">
+                                <div class="nucleus w-4 h-4 bg-emerald-200"></div>
+                                <div class="absolute top-2 left-2 w-1 h-1 bg-rose-400 rounded-full"></div>
+                                <div class="absolute bottom-3 right-2 w-1.5 h-1.5 bg-rose-400 rounded-full"></div>
+                                <div class="absolute top-5 right-2 w-1 h-1 bg-rose-400 rounded-full"></div>
+                            </div>
+                        </div>
+                        <p class="text-sm text-slate-600 mb-4 flex-1">
+                            破裂細胞的 RNA 釋放到懸浮液中，被一起封裝到液滴裡。導致原本不該表現某基因的細胞（如 T 細胞）錯誤檢測出該基因（如肝細胞特異性基因）。
+                        </p>
+                        <div class="bg-slate-50 p-3 rounded text-sm">
+                            <strong class="text-slate-700">解決方案：</strong><br>
+                            估算背景 RNA 分佈，並從表現矩陣中「減去」這部分污染值。<br>
+                            <span class="text-xs text-blue-600 font-mono mt-1 block">常用工具: SoupX, CellBender</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section 5: 策略與實踐 -->
+            <section id="strategies" class="scroll-mt-20 md:scroll-mt-10">
+                <h3 class="text-2xl font-bold text-slate-900 mb-6 border-b border-slate-200 pb-2">四、 QC 閾值設定策略與最佳實踐</h3>
+                
+                <!-- 比較表 -->
+                <div class="overflow-hidden rounded-xl border border-slate-200 mb-8 shadow-sm">
+                    <table class="w-full text-left text-sm">
+                        <thead>
+                            <tr class="bg-slate-100 text-slate-700">
+                                <th class="p-4 font-semibold w-1/3">策略類型</th>
+                                <th class="p-4 font-semibold w-1/3 border-l border-slate-200">固定閾值 (傳統)</th>
+                                <th class="p-4 font-semibold w-1/3 border-l border-slate-200">自適應閾值 (目前最佳實踐)</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-slate-100 text-slate-600">
+                            <tr>
+                                <td class="p-4 font-medium text-slate-800">概念</td>
+                                <td class="p-4 border-l border-slate-200">使用主觀的死板數值 (如 MT% < 5%)</td>
+                                <td class="p-4 border-l border-slate-200">基於數據分佈 (Data-driven) 決定</td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 font-medium text-slate-800">常見方法</td>
+                                <td class="p-4 border-l border-slate-200">文獻常規經驗值</td>
+                                <td class="p-4 border-l border-slate-200"><strong>絕對中位差 (MAD)</strong>: 中位數 + 3 倍 MAD</td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 font-medium text-slate-800">缺點/優點</td>
+                                <td class="p-4 border-l border-slate-200 text-rose-600 bg-rose-50/30">在多樣本整合或特殊組織分析時極易出錯。</td>
+                                <td class="p-4 border-l border-slate-200 text-emerald-700 bg-emerald-50/30">對極端值更具強健性，能適應不同樣本本身的品質差異。(例如 scater 提供的 <code class="text-xs">isOutlier()</code>)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 最佳實踐清單 -->
+                <div class="bg-slate-800 rounded-xl p-8 text-slate-200 shadow-md">
+                    <h4 class="text-xl font-bold text-white mb-6 flex items-center">
+                        <span class="text-amber-400 mr-2">💡</span> 核心專家建議
+                    </h4>
+                    <ul class="space-y-4">
+                        <li class="flex items-start">
+                            <div class="flex-shrink-0 w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center text-sm font-bold text-blue-400 mt-0.5 mr-3">1</div>
+                            <p><strong>沒有放諸四海皆準的閾值：</strong> QC 必須根據您的物種、組織類型（如心肌細胞粒線體本就偏高）、測序技術進行調整。務必查看小提琴圖與散佈圖。</p>
+                        </li>
+                        <li class="flex items-start">
+                            <div class="flex-shrink-0 w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center text-sm font-bold text-blue-400 mt-0.5 mr-3">2</div>
+                            <p><strong>聯合分佈比單一指標更重要：</strong> 就像上面的互動圖表，好的細胞應沿著對角線分佈；偏離軌跡的通常品質有問題。</p>
+                        </li>
+                        <li class="flex items-start">
+                            <div class="flex-shrink-0 w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center text-sm font-bold text-blue-400 mt-0.5 mr-3">3</div>
+                            <p><strong>寧可稍微寬鬆，也不要過度過濾 (Over-filtering)：</strong> 過於嚴苛可能會把罕見的細胞亞群（例如靜止期細胞）給過濾掉。</p>
+                        </li>
+                        <li class="flex items-start">
+                            <div class="flex-shrink-0 w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center text-sm font-bold text-blue-400 mt-0.5 mr-3">4</div>
+                            <p><strong>將 QC 視為一個迭代過程：</strong> 初步寬鬆分群後，若發現某 Cluster 具高粒線體比例且缺乏特異標記，可回頭在 QC 步驟將其剔除。</p>
+                        </li>
+                    </ul>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- 邏輯腳本 -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // --- 導覽列邏輯 ---
+            const sections = document.querySelectorAll('section');
+            const navItemsDesktop = document.querySelectorAll('#sidebar-nav .nav-item');
+        const navMobile = document.getElementById('mobile-nav');
+        const mainContent = document.getElementById('main-content');
+        
+        // 滾動監聽 (高亮當前段落)
+        mainContent.addEventListener('scroll', () => {
+          let current = '';
+          sections.forEach(section => {
+            const sectionTop = section.offsetTop;
+            // 加入一點位移容差
+            if (mainContent.scrollTop >= sectionTop - 100) {
+              current = section.getAttribute('id');
+            }
+          });
+          
+          navItemsDesktop.forEach(item => {
+            item.classList.remove('active');
+            if (item.getAttribute('href') === `#${current}`) {
+              item.classList.add('active');
+            }
+          });
+          
+          if(current) navMobile.value = `#${current}`;
+        });
+        
+        // 行動版導覽跳轉
+        navMobile.addEventListener('change', (e) => {
+          const targetId = e.target.value.substring(1);
+          const targetEl = document.getElementById(targetId);
+          if(targetEl) {
+            targetEl.scrollIntoView({ behavior: 'smooth' });
+          }
+        });
+        
+        // --- 互動 QC 模擬器邏輯 ---
+          
+          // 1. 生成 Mock Data (模擬真實 scRNA-seq 分佈)
+        const TOTAL_CELLS = 800;
+        const mockData = [];
+        
+        for (let i = 0; i < TOTAL_CELLS; i++) {
+          // 大部分是正常細胞
+          let type = 'normal';
+          let rand = Math.random();
+          
+          if (rand < 0.15) type = 'dead'; // 15% 死亡/破裂
+          else if (rand > 0.90) type = 'doublet'; // 10% 雙細胞
+          else if (rand > 0.85) type = 'empty'; // 5% 空液滴/雜訊
+          
+          let nFeature, nCount, mtPercent;
+          
+          switch(type) {
+            case 'normal':
+              // nFeature 通常在 1000 - 3500, nCount 約是 nFeature 的 2-3 倍
+            nFeature = 800 + Math.random() * 2700;
+            nCount = nFeature * (1.5 + Math.random() * 2);
+            mtPercent = Math.random() * 8; // 0-8%
+            break;
+            case 'dead':
+              // 基因數少，但 MT 比例極高
+            nFeature = 200 + Math.random() * 800;
+            nCount = nFeature * (1.2 + Math.random() * 1);
+            mtPercent = 10 + Math.random() * 30; // 10-40%
+            break;
+            case 'doublet':
+              // 基因數與 Count 異常高
+            nFeature = 3500 + Math.random() * 3500;
+            nCount = nFeature * (2.5 + Math.random() * 3);
+            mtPercent = Math.random() * 5;
+            break;
+            case 'empty':
+              // 極低的數據
+            nFeature = 50 + Math.random() * 150;
+            nCount = nFeature * 1.1;
+            mtPercent = Math.random() * 15;
+            break;
+          }
+          
+          mockData.push({
+            x: nCount,
+            y: nFeature,
+            mt: mtPercent,
+            originalType: type // 僅供參考，圖表著色依靠閾值
+          });
+        }
+        
+        // 2. Chart.js 實例化
+        const ctx = document.getElementById('qcChart').getContext('2d');
+        const qcChart = new Chart(ctx, {
+          type: 'scatter',
+          data: {
+            datasets: [{
+              label: '細胞 (Cells)',
+              data: mockData,
+              backgroundColor: [], // 將動態更新
+              pointRadius: 4,
+              pointHoverRadius: 6,
+              borderWidth: 0
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false, // 關鍵：讓容器決定高度
+            animation: { duration: 300 }, // 降低動畫時間提升拖曳流暢度
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    const raw = context.raw;
+                    return `nCount: ${Math.round(raw.x)} | nFeature: ${Math.round(raw.y)} | MT%: ${raw.mt.toFixed(1)}%`;
+                  }
+                }
+              }
+            },
+            scales: {
+              x: {
+                title: { display: true, text: 'nCount_RNA (總 UMI)', color: '#64748b' },
+                grid: { color: '#f1f5f9' },
+                ticks: { color: '#94a3b8' }
+              },
+              y: {
+                title: { display: true, text: 'nFeature_RNA (基因數)', color: '#64748b' },
+                grid: { color: '#f1f5f9' },
+                ticks: { color: '#94a3b8' }
+              }
+            }
+          }
+        });
+        
+        // 3. UI 元素綁定
+        const slMinGene = document.getElementById('slider-min-gene');
+        const slMaxGene = document.getElementById('slider-max-gene');
+        const slMaxMT = document.getElementById('slider-max-mt');
+        
+        const valMinGene = document.getElementById('val-min-gene');
+        const valMaxGene = document.getElementById('val-max-gene');
+        const valMaxMT = document.getElementById('val-max-mt');
+        
+        const statTotal = document.getElementById('stat-total');
+        const statKept = document.getElementById('stat-kept');
+        const statFiltered = document.getElementById('stat-filtered');
+        
+        statTotal.textContent = TOTAL_CELLS;
+        
+        // 4. 更新邏輯
+        function updateQC() {
+          const minG = parseFloat(slMinGene.value);
+          const maxG = parseFloat(slMaxGene.value);
+          const maxM = parseFloat(slMaxMT.value);
+          
+          // 更新文字顯示
+          valMinGene.textContent = minG;
+          valMaxGene.textContent = maxG;
+          valMaxMT.textContent = maxM + '%';
+          
+          let keptCount = 0;
+          let filterCount = 0;
+          const colors = [];
+          
+          // 根據閾值評估每個點
+          mockData.forEach(cell => {
+            // 檢查是否通過所有過濾條件
+            const isKept = (cell.y >= minG) && (cell.y <= maxG) && (cell.mt <= maxM);
+            
+            if(isKept) {
+              // 翡翠綠 (通過)
+              colors.push('rgba(16, 185, 129, 0.7)'); 
+              keptCount++;
+            } else {
+              // 玫瑰紅 (剔除)
+              colors.push('rgba(244, 63, 94, 0.4)'); 
+              filterCount++;
+            }
+          });
+          
+          // 更新圖表顏色
+          qcChart.data.datasets[0].backgroundColor = colors;
+          qcChart.update();
+          
+          // 更新統計數字
+          statKept.textContent = keptCount + ` (${((keptCount/TOTAL_CELLS)*100).toFixed(1)}%)`;
+          statFiltered.textContent = filterCount;
+        }
+        
+        // 監聽滑桿
+        [slMinGene, slMaxGene, slMaxMT].forEach(slider => {
+          slider.addEventListener('input', updateQC);
+        });
+        
+        // 重置按鈕
+        document.getElementById('btn-reset').addEventListener('click', () => {
+          slMinGene.value = 200;
+          slMaxGene.value = 4000;
+          slMaxMT.value = 10;
+          updateQC();
+        });
+        
+        // 初始觸發一次
+        updateQC();
+        });
+</script>
+  </body>
+  </html>
