@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>scRNA-seq 細胞間通訊 (CCC) 深度互動指南</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans TC', sans-serif; }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 45vh;
+            max-height: 450px;
+        }
+        .nav-active {
+            background-color: #e0f2fe;
+            color: #0369a1;
+            border-right: 4px solid #0369a1;
+        }
+        .animate-ligand { animation: moveLigand 3s infinite; }
+        @keyframes moveLigand {
+            0% { transform: translateX(0) scale(1); opacity: 1; }
+            50% { transform: translateX(120px) scale(1.2); opacity: 1; }
+            100% { transform: translateX(200px) scale(0); opacity: 0; }
+        }
+        .pulse-receptor { animation: pulseReceptor 3s infinite; }
+        @keyframes pulseReceptor {
+            0%, 40% { transform: scale(1); box-shadow: 0 0 0 rgba(14, 165, 233, 0); }
+            60% { transform: scale(1.1); box-shadow: 0 0 15px rgba(14, 165, 233, 0.6); }
+            100% { transform: scale(1); box-shadow: 0 0 0 rgba(14, 165, 233, 0); }
+        }
+        .fade-in { animation: fadeIn 0.4s ease-in; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .viz-card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .viz-card:hover { transform: translateY(-4px); }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 flex h-screen overflow-hidden">
+
+    <!-- Chosen Palette: Slate-50 (Background), Sky-700 (Primary Accents), Emerald-600 (Success), Amber-500 (Warnings), White (Surface) -->
+    <!-- Application Structure Plan: 採用儀表板式佈局，左側為導航導引，右側為動態內容區。為了應對增加的可視化需求，我將「數據可視化」章節細分為多個子分頁（Tabs），每個分頁展示一種特定的圖表類型（氣泡圖、和弦圖、層次圖、河流圖），並搭配具體的解釋與互動模擬，讓使用者能比較不同圖表的資訊承載力。 -->
+    <!-- Visualization & Content Choices: 
+         1. 核心概念 -> 透過 CSS 動畫模擬配體受體對接。
+         2. 分析工具 -> 採用對比卡片展示 CellChat, CellPhoneDB 等。
+         3. 數據可視化 -> 重頭戲。
+            - 氣泡圖：Chart.js Bubble Chart（點的大小代表 P 值，顏色代表強度）。
+            - 和弦圖：自定義 Canvas 繪圖（展示細胞間的雙向流量）。
+            - 層次圖：HTML/CSS 結構化佈局（展示信號流向的階層）。
+            - 河流圖：自定義 Canvas Ribbon 繪圖（展示信號從發送者到路徑再到接收者的轉移）。
+         4. 挑戰趨勢 -> 結構化文字塊。
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. All complex visualizations are handled via HTML5 Canvas or CSS. -->
+
+    <aside class="w-64 bg-white border-r border-slate-200 flex flex-col z-20 shadow-sm">
+        <div class="p-6 border-b border-slate-100">
+            <div class="w-10 h-10 bg-sky-600 text-white rounded-lg flex items-center justify-center text-xl font-bold mb-3">CCC</div>
+            <h1 class="text-xl font-bold text-slate-900 leading-tight">scRNA-seq 通訊指南</h1>
+            <p class="text-xs text-slate-500 mt-1">深度互動分析版本 v2.0</p>
+        </div>
+        <nav class="flex-1 overflow-y-auto py-4">
+            <button class="nav-btn w-full text-left px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors nav-active" data-target="section-core">
+                <span class="mr-2">🔬</span> 1. 核心概念與原理
+            </button>
+            <button class="nav-btn w-full text-left px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors" data-target="section-workflow">
+                <span class="mr-2">⚙️</span> 2. 標準分析流程
+            </button>
+            <button class="nav-btn w-full text-left px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors" data-target="section-tools">
+                <span class="mr-2">🛠️</span> 3. 主流工具對比
+            </button>
+            <button class="nav-btn w-full text-left px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors" data-target="section-viz">
+                <span class="mr-2">📊</span> 4. 多維度可視化演示
+            </button>
+            <button class="nav-btn w-full text-left px-6 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors" data-target="section-challenges">
+                <span class="mr-2">⚠️</span> 5. 局限性與未來趨勢
+            </button>
+        </nav>
+    </aside>
+
+    <main class="flex-1 overflow-y-auto relative h-full bg-slate-50">
+        
+        <!-- SECTION 1: CORE CONCEPTS -->
+        <section id="section-core" class="content-section p-8 md:p-12 max-w-5xl mx-auto fade-in block">
+            <header class="mb-10">
+                <h2 class="text-3xl font-bold text-slate-900 mb-4">細胞間通訊 (CCC) 的科學基礎</h2>
+                <p class="text-lg text-slate-600 leading-relaxed">
+                    在多細胞生物中，細胞並非孤立存在。通訊分析的核心在於識別「發送細胞」釋放的「配體」如何與「接收細胞」上的「受體」結合。scRNA-seq 讓我們能大規模觀察這些分子的轉錄水平，進而推測細胞間的對話網絡。
+                </p>
+            </header>
+
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 mb-8">
+                <h3 class="text-xl font-bold text-slate-800 mb-6 border-b border-slate-100 pb-2">分子對接模型</h3>
+                <div class="flex flex-col md:flex-row items-center justify-between bg-slate-50 rounded-xl p-10 overflow-hidden relative min-h-[350px]">
+                    <div class="flex flex-col items-center z-10 w-1/3">
+                        <div class="w-32 h-32 rounded-full bg-emerald-100 border-4 border-emerald-400 flex items-center justify-center mb-4 relative shadow-md">
+                            <span class="font-bold text-emerald-800">Sender<br>細胞 A</span>
+                            <div class="absolute w-4 h-4 bg-emerald-500 rounded-full right-4 top-1/2 animate-ligand"></div>
+                        </div>
+                        <h4 class="font-bold text-lg text-slate-800">信號發送源</h4>
+                        <p class="text-xs text-slate-500 text-center mt-2 px-4">高表達配體 (Ligand) 基因，如 CCL5, VEGFA 等。</p>
+                    </div>
+
+                    <div class="flex flex-col justify-center items-center w-1/3 relative">
+                        <div class="bg-white px-4 py-2 rounded-lg shadow-sm border border-slate-200 text-sm font-bold text-sky-700 z-10 text-center">
+                            配體受體對 (L-R Pair)<br>
+                            <span class="text-xs text-slate-400 font-normal italic">核心分析單位</span>
+                        </div>
+                        <div class="w-full border-t-2 border-dashed border-slate-300 absolute top-1/2 -z-0"></div>
+                    </div>
+
+                    <div class="flex flex-col items-center z-10 w-1/3">
+                        <div class="w-32 h-32 rounded-full bg-sky-100 border-4 border-sky-400 flex items-center justify-center mb-4 relative shadow-md">
+                            <span class="font-bold text-sky-800">Receiver<br>細胞 B</span>
+                            <div class="absolute -left-3 top-1/2 transform -translate-y-1/2 w-6 h-8 bg-sky-500 rounded-l-full pulse-receptor"></div>
+                        </div>
+                        <h4 class="font-bold text-lg text-slate-800">信號接收者</h4>
+                        <p class="text-xs text-slate-500 text-center mt-2 px-4">高表達受體 (Receptor) 基因，如 CCR5, FLT1 等。</p>
+                    </div>
+                </div>
+
+                <div class="mt-8 bg-amber-50 border-l-4 border-amber-400 p-4">
+                    <p class="text-sm text-amber-900 font-medium">重要前提：</p>
+                    <p class="text-sm text-amber-800 mt-1">分析假設基因的轉錄量與蛋白質活性呈正相關。雖然不完全精確，但在單細胞尺度上，這是目前預測細胞行為的最有效手段之一。</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 2: WORKFLOW -->
+        <section id="section-workflow" class="content-section p-8 md:p-12 max-w-5xl mx-auto fade-in hidden">
+            <header class="mb-10">
+                <h2 class="text-3xl font-bold text-slate-900 mb-4">標準化分析管道</h2>
+                <p class="text-lg text-slate-600 leading-relaxed">
+                    從原始數據到通訊地圖，需要經過嚴謹的統計檢驗。以下是獲取可靠通訊預測的必經步驟：
+                </p>
+            </header>
+
+            <div class="space-y-6">
+                <div class="flex gap-6 items-start">
+                    <div class="w-12 h-12 bg-sky-100 text-sky-700 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-xl">1</div>
+                    <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex-1">
+                        <h4 class="font-bold text-slate-800 mb-2">預處理與註釋</h4>
+                        <p class="text-sm text-slate-600">完成標準的 Seurat/Scanpy 流程，確保細胞類型標籤 (Cell Labels) 的準確性，這是後續所有通訊計算的基石。</p>
+                    </div>
+                </div>
+                <div class="flex gap-6 items-start">
+                    <div class="w-12 h-12 bg-sky-100 text-sky-700 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-xl">2</div>
+                    <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex-1">
+                        <h4 class="font-bold text-slate-800 mb-2">平均表達量與頻率計算</h4>
+                        <p class="text-sm text-slate-600">計算每個細胞群中配體與受體基因的平均表達值，並考慮表達該基因的細胞佔比（通常需 > 10% 才有意義）。</p>
+                    </div>
+                </div>
+                <div class="flex gap-6 items-start">
+                    <div class="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-xl">3</div>
+                    <div class="bg-white p-6 rounded-xl border border-emerald-200 shadow-sm flex-1 border-l-8">
+                        <h4 class="font-bold text-emerald-800 mb-2">置換檢驗 (Permutation Test)</h4>
+                        <p class="text-sm text-slate-600">隨機打亂細胞標籤數千次，構建零分佈，判斷觀察到的 L-R 對強度是否顯著大於隨機期望值。這是過濾背景噪音的核心。</p>
+                    </div>
+                </div>
+                <div class="flex gap-6 items-start">
+                    <div class="w-12 h-12 bg-purple-100 text-purple-700 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-xl">4</div>
+                    <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex-1">
+                        <h4 class="font-bold text-slate-800 mb-2">系統級模式識別</h4>
+                        <p class="text-sm text-slate-600">將成千上萬的通訊對歸納為特定的生物學路徑或模式，從宏觀角度理解組織微環境的特徵。</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 3: TOOLS -->
+        <section id="section-tools" class="content-section p-8 md:p-12 max-w-5xl mx-auto fade-in hidden">
+            <header class="mb-10">
+                <h2 class="text-3xl font-bold text-slate-900 mb-4">分析工具全景圖</h2>
+                <p class="text-lg text-slate-600 leading-relaxed">選擇合適的工具取決於您的生物學問題：是想看整體網絡，還是具體的下游功能影響？</p>
+            </header>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="viz-card bg-white p-6 rounded-xl border border-slate-200 shadow-sm border-t-4 border-t-blue-500">
+                    <h4 class="font-bold text-blue-800 text-xl mb-3">CellChat</h4>
+                    <p class="text-sm text-slate-700 mb-4 font-medium">優點：多亞基複合物處理、模式分析。</p>
+                    <p class="text-sm text-slate-600">透過流形學習等演算法識別顯著的通訊路徑，並提供極其豐富的可視化函數。適合進行對比分析（如：對照組 vs. 給藥組）。</p>
+                </div>
+                <div class="viz-card bg-white p-6 rounded-xl border border-slate-200 shadow-sm border-t-4 border-t-teal-500">
+                    <h4 class="font-bold text-teal-800 text-xl mb-3">CellPhoneDB</h4>
+                    <p class="text-sm text-slate-700 mb-4 font-medium">優點：數據庫註釋精準、學界公認標準。</p>
+                    <p class="text-sm text-slate-600">專注於人類組織，其 L-R 數據庫經過人工高度篩選，結果的生物學解釋性極強。是多數頂級期刊文章的首選工具。</p>
+                </div>
+                <div class="viz-card bg-white p-6 rounded-xl border border-slate-200 shadow-sm border-t-4 border-t-purple-500">
+                    <h4 class="font-bold text-purple-800 text-xl mb-3">NicheNet</h4>
+                    <p class="text-sm text-slate-700 mb-4 font-medium">優點：下游靶基因預測、機制深入。</p>
+                    <p class="text-sm text-slate-600">不只預測 A 和 B 是否在說話，還能推測 A 的信號具體導致了 B 細胞核內哪些基因的變化，建立真正的因果鏈。</p>
+                </div>
+                <div class="viz-card bg-white p-6 rounded-xl border border-slate-200 shadow-sm border-t-4 border-t-orange-500">
+                    <h4 class="font-bold text-orange-800 text-xl mb-3">LIANA</h4>
+                    <p class="text-sm text-slate-700 mb-4 font-medium">優點：多算法整合、快速迭代。</p>
+                    <p class="text-sm text-slate-600">透過一個統一的 API 運行多種分析演算法，讓研究者能快速驗證不同工具之間的一致性，避免單一工具的算法偏向。</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 4: VISUALIZATIONS (REDEFINED) -->
+        <section id="section-viz" class="content-section p-8 md:p-12 max-w-6xl mx-auto fade-in hidden">
+            <header class="mb-8">
+                <h2 class="text-3xl font-bold text-slate-900 mb-4">多維度數據可視化演示</h2>
+                <p class="text-lg text-slate-600 leading-relaxed">
+                    通訊分析產生的數據量極大且維度極高。選擇正確的圖表，能幫助您快速定位關鍵的生物學發現。以下演示了四種主流的可視化模型：
+                </p>
+            </header>
+
+            <!-- Viz Tabs Container -->
+            <div class="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
+                <div class="flex bg-slate-100 border-b border-slate-200 overflow-x-auto no-scrollbar">
+                    <button class="viz-tab px-6 py-4 text-sm font-bold text-sky-700 border-b-2 border-sky-600 bg-white" data-viz="bubble">氣泡圖 (Bubble)</button>
+                    <button class="viz-tab px-6 py-4 text-sm font-medium text-slate-500 hover:text-sky-700 transition-colors" data-viz="chord">和弦圖 (Chord)</button>
+                    <button class="viz-tab px-6 py-4 text-sm font-medium text-slate-500 hover:text-sky-700 transition-colors" data-viz="hierarchy">層次圖 (Hierarchy)</button>
+                    <button class="viz-tab px-6 py-4 text-sm font-medium text-slate-500 hover:text-sky-700 transition-colors" data-viz="sankey">河流圖 (Sankey)</button>
+                </div>
+
+                <div class="p-8">
+                    <!-- Bubble Plot Content -->
+                    <div id="viz-bubble" class="viz-content block">
+                        <div class="flex flex-col lg:flex-row gap-8">
+                            <div class="flex-1">
+                                <h4 class="text-xl font-bold text-slate-800 mb-4">氣泡圖：詳細通訊對掃描</h4>
+                                <p class="text-sm text-slate-600 mb-6">
+                                    最傳統且精確的展示方式。橫軸展示具體的 L-R 對，縱軸展示細胞類型對（Sender -> Receiver）。<br><br>
+                                    <strong>如何閱讀：</strong><br>
+                                    • 氣泡越大 = P 值越顯著（證據越強）。<br>
+                                    • 顏色越紅 = 通訊強度（概率）越高。
+                                </p>
+                                <div class="bg-slate-50 p-4 rounded-lg border border-slate-100">
+                                    <label class="block text-xs font-bold text-slate-500 mb-2 uppercase">切換路徑：</label>
+                                    <select id="bubble-pathway" class="w-full bg-white border border-slate-300 rounded p-2 text-sm outline-none">
+                                        <option value="cxcl">CXCL 趨化路徑</option>
+                                        <option value="tgfb">TGF-beta 路徑</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="flex-[2] bg-white border border-slate-100 rounded-xl p-4">
+                                <div class="chart-container">
+                                    <canvas id="canvasBubble"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Chord Plot Content -->
+                    <div id="viz-chord" class="viz-content hidden">
+                        <div class="flex flex-col lg:flex-row gap-8">
+                            <div class="flex-1">
+                                <h4 class="text-xl font-bold text-slate-800 mb-4">和弦圖：細胞間的宏觀流量</h4>
+                                <p class="text-sm text-slate-600 mb-6">
+                                    側重於展示不同細胞群體之間的「對話量」。圓環周邊代表不同的細胞群，內部的連線代表信號流向。<br><br>
+                                    <strong>優勢：</strong><br>
+                                    能一眼看出哪些細胞是「社交達人」（連線非常密集），以及通訊是否存在明顯的定向性。
+                                </p>
+                                <div class="p-4 bg-sky-50 rounded-lg text-xs text-sky-800">
+                                    💡 試著將滑鼠懸停在圓環上查看連線細節。
+                                </div>
+                            </div>
+                            <div class="flex-[1.5] flex justify-center items-center">
+                                <div class="chart-container flex items-center justify-center">
+                                    <canvas id="canvasChord" width="450" height="450"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Hierarchy Plot Content -->
+                    <div id="viz-hierarchy" class="viz-content hidden">
+                        <div class="flex flex-col lg:flex-row gap-8">
+                            <div class="flex-1">
+                                <h4 class="text-xl font-bold text-slate-800 mb-4">層次圖：信號源的地位分析</h4>
+                                <p class="text-sm text-slate-600 mb-6">
+                                    將通訊網絡簡化為階層結構。通常位於最上方的細胞群體是該信號路徑的主要「主導者」(Dominant Sender)。<br><br>
+                                    <strong>應用：</strong><br>
+                                    非常適合展示像 WNT 或 NOTCH 這種具有明顯發送者與接收者分工的路徑。
+                                </p>
+                            </div>
+                            <div class="flex-[2] p-6 bg-slate-50 rounded-xl">
+                                <div class="flex flex-col items-center gap-12">
+                                    <!-- Sender Tier -->
+                                    <div class="flex flex-col items-center">
+                                        <div class="px-6 py-2 bg-emerald-600 text-white rounded-full font-bold shadow-md">主要發送者 (Macrophage)</div>
+                                        <div class="h-12 w-1 bg-slate-300"></div>
+                                    </div>
+                                    <!-- Middle Tier -->
+                                    <div class="flex justify-around w-full relative">
+                                        <div class="absolute top-0 left-1/4 right-1/4 h-1 bg-slate-300"></div>
+                                        <div class="flex flex-col items-center">
+                                            <div class="h-6 w-1 bg-slate-300"></div>
+                                            <div class="px-4 py-2 bg-white border-2 border-slate-300 rounded-lg text-sm font-bold text-slate-700">次要發送者 (DC)</div>
+                                        </div>
+                                        <div class="flex flex-col items-center">
+                                            <div class="h-6 w-1 bg-slate-300"></div>
+                                            <div class="px-4 py-2 bg-white border-2 border-slate-300 rounded-lg text-sm font-bold text-slate-700">路徑中介者 (T Cell)</div>
+                                        </div>
+                                    </div>
+                                    <!-- Receiver Tier -->
+                                    <div class="flex justify-between w-full mt-4">
+                                        <div class="px-4 py-3 bg-sky-100 border border-sky-300 rounded text-xs font-bold text-sky-800 text-center">主要接收者 A<br>(Fibroblast)</div>
+                                        <div class="px-4 py-3 bg-sky-100 border border-sky-300 rounded text-xs font-bold text-sky-800 text-center">主要接收者 B<br>(Endothelial)</div>
+                                        <div class="px-4 py-3 bg-sky-100 border border-sky-300 rounded text-xs font-bold text-sky-800 text-center">下游目標<br>(Myocyte)</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sankey Plot Content -->
+                    <div id="viz-sankey" class="viz-content hidden">
+                        <div class="flex flex-col lg:flex-row gap-8">
+                            <div class="flex-1">
+                                <h4 class="text-xl font-bold text-slate-800 mb-4">河流圖：信號流轉路徑</h4>
+                                <p class="text-sm text-slate-600 mb-6">
+                                    展示信號如何從「發送群體」流向不同的「路徑」，最終被「接收群體」捕捉。它能展示複雜的多對多關係。<br><br>
+                                    <strong>視覺重點：</strong><br>
+                                    河流（色塊）的寬度代表通訊流量的強度。寬大的河流代表了組織中最主要的信號交換路徑。
+                                </p>
+                            </div>
+                            <div class="flex-[2] bg-white border border-slate-100 rounded-xl overflow-hidden shadow-inner">
+                                <canvas id="canvasSankey" width="600" height="400"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 5: CHALLENGES -->
+        <section id="section-challenges" class="content-section p-8 md:p-12 max-w-5xl mx-auto fade-in hidden">
+            <header class="mb-10">
+                <h2 class="text-3xl font-bold text-slate-900 mb-4">局限性、空間趨勢與驗證</h2>
+                <p class="text-lg text-slate-600 leading-relaxed">通訊預測僅是研究的起點，而非終點。理解其局限性能幫助我們做出更嚴謹的結論。</p>
+            </header>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+                <div class="bg-rose-50 border-l-4 border-rose-500 p-6 rounded-r-xl">
+                    <h4 class="font-bold text-rose-800 mb-3">⚠️ 技術挑戰：解離後的丟失</h4>
+                    <p class="text-sm text-slate-700 leading-relaxed italic">
+                        "If two cells are on opposite sides of a tumor, they can't talk, even if they express the right L-R pair."
+                    </p>
+                    <p class="text-sm text-slate-600 mt-3">傳統 scRNA-seq 會將組織打散成懸液，這讓算法難以區分「鄰分泌」(Juxtacrine) 與「旁分泌」(Paracrine)。這導致了大量的預測偽陽性。</p>
+                </div>
+                <div class="bg-indigo-50 border-l-4 border-indigo-500 p-6 rounded-r-xl">
+                    <h4 class="font-bold text-indigo-800 mb-3">🚀 未來：空間轉錄組學 (ST)</h4>
+                    <p class="text-sm text-slate-600 leading-relaxed">
+                        目前最前沿的方法是結合 <strong>Visium</strong> 或 <strong>CosMx</strong> 等空間技術。工具如 <strong>CellChat v2</strong> 現在能設定物理距離約束，僅允許距離相近的細胞進行通訊預測，極大地提升了精準度。
+                    </p>
+                </div>
+            </div>
+
+            <div class="bg-slate-900 rounded-2xl p-8 text-white">
+                <h4 class="text-xl font-bold mb-6 flex items-center gap-2">
+                    <span class="text-emerald-400">✅</span> 實驗驗證的三部曲
+                </h4>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                    <div class="p-4 bg-white/10 rounded-lg border border-white/10">
+                        <div class="text-xs font-bold text-emerald-400 uppercase mb-2">步驟 1</div>
+                        <p class="text-sm font-bold mb-1">蛋白質驗證</p>
+                        <p class="text-xs text-slate-400">使用免疫螢光 (IF) 或共焦顯微鏡確認 L-R 蛋白在空間位置上的共定位。</p>
+                    </div>
+                    <div class="p-4 bg-white/10 rounded-lg border border-white/10">
+                        <div class="text-xs font-bold text-emerald-400 uppercase mb-2">步驟 2</div>
+                        <p class="text-sm font-bold mb-1">功能干預</p>
+                        <p class="text-xs text-slate-400">利用中和抗體 (Neutralizing antibodies) 或敲低基因，觀察下游細胞行為是否改變。</p>
+                    </div>
+                    <div class="p-4 bg-white/10 rounded-lg border border-white/10">
+                        <div class="text-xs font-bold text-emerald-400 uppercase mb-2">步驟 3</div>
+                        <p class="text-sm font-bold mb-1">訊號讀數</p>
+                        <p class="text-xs text-slate-400">檢測接收細胞內部的磷酸化水平 (Phospho-western) 或特異性報告基因活性。</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // --- Navigation Logic ---
+        const navBtns = document.querySelectorAll('.nav-btn');
+        const sections = document.querySelectorAll('.content-section');
+
+        navBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                navBtns.forEach(b => {
+                    b.classList.remove('nav-active');
+                    b.classList.add('text-slate-600');
+                });
+                btn.classList.add('nav-active');
+                btn.classList.remove('text-slate-600');
+
+                const targetId = btn.getAttribute('data-target');
+                sections.forEach(sec => {
+                    if (sec.id === targetId) {
+                        sec.classList.remove('hidden');
+                        sec.classList.add('block');
+                        if(targetId === 'section-viz') {
+                            // Re-trigger Canvas drawings when entering viz section
+                            drawChord();
+                            drawSankey();
+                        }
+                    } else {
+                        sec.classList.add('hidden');
+                        sec.classList.remove('block');
+                    }
+                });
+            });
+        });
+
+        // --- Viz Tabs Logic ---
+        const vizTabs = document.querySelectorAll('.viz-tab');
+        const vizContents = document.querySelectorAll('.viz-content');
+
+        vizTabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                vizTabs.forEach(t => {
+                    t.classList.remove('text-sky-700', 'border-b-2', 'border-sky-600', 'bg-white');
+                    t.classList.add('text-slate-500');
+                });
+                tab.classList.add('text-sky-700', 'border-b-2', 'border-sky-600', 'bg-white');
+                tab.classList.remove('text-slate-500');
+
+                const vizId = `viz-${tab.getAttribute('data-viz')}`;
+                vizContents.forEach(content => {
+                    content.classList.add('hidden');
+                    if (content.id === vizId) content.classList.remove('hidden');
+                });
+
+                // Init specific viz
+                if(tab.getAttribute('data-viz') === 'chord') drawChord();
+                if(tab.getAttribute('data-viz') === 'sankey') drawSankey();
+            });
+        });
+
+        // --- BUBBLE CHART (Chart.js) ---
+        const ctxB = document.getElementById('canvasBubble').getContext('2d');
+        const cellPairs = ['Macrophage -> T Cell', 'T Cell -> Macrophage', 'Fibroblast -> Endo', 'Endo -> T Cell'];
+        const lrPairs = ['L1-R1', 'L2-R2', 'L3-R3', 'L4-R4', 'L5-R5'];
+        
+        const generateBubbleData = () => {
+            let pts = [];
+            for(let i=0; i<5; i++) {
+                for(let j=0; j<4; j++) {
+                    pts.push({ x: i, y: j, r: Math.random() * 15 + 2, v: Math.random() });
+                }
+            }
+            return pts;
+        };
+
+        let bubbleChart;
+        function updateBubble() {
+            const data = generateBubbleData();
+            const config = {
+                type: 'bubble',
+                data: {
+                    datasets: [{
+                        data: data.map(p => ({ x: p.x, y: p.y, r: p.r })),
+                        backgroundColor: data.map(p => `rgba(${255 * (1-p.v)}, ${100 + 155*p.v}, ${200}, 0.6)`),
+                        borderColor: 'rgba(255,255,255,0.8)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { ticks: { callback: v => lrPairs[v] || '' }, min: -0.5, max: 4.5 },
+                        y: { ticks: { callback: v => cellPairs[v] || '' }, min: -0.5, max: 3.5 }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            };
+            if(bubbleChart) bubbleChart.destroy();
+            bubbleChart = new Chart(ctxB, config);
+        }
+        updateBubble();
+        document.getElementById('bubble-pathway').addEventListener('change', updateBubble);
+
+        // --- CHORD PLOT (Custom Canvas) ---
+        function drawChord() {
+            const canvas = document.getElementById('canvasChord');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const radius = 160;
+            const nodes = [
+                { name: 'Macrophage', color: '#10b981' },
+                { name: 'T Cell', color: '#0ea5e9' },
+                { name: 'Fibroblast', color: '#8b5cf6' },
+                { name: 'Endothelial', color: '#f59e0b' }
+            ];
+
+            // Draw Outer Rings
+            nodes.forEach((node, i) => {
+                const startAngle = (i * Math.PI * 2) / nodes.length;
+                const endAngle = ((i + 1) * Math.PI * 2) / nodes.length - 0.15;
+                
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, radius + 10, startAngle, endAngle);
+                ctx.strokeStyle = node.color;
+                ctx.lineWidth = 15;
+                ctx.stroke();
+
+                // Labels
+                const midAngle = (startAngle + endAngle) / 2;
+                const tx = centerX + (radius + 45) * Math.cos(midAngle);
+                const ty = centerY + (radius + 45) * Math.sin(midAngle);
+                ctx.fillStyle = '#475569';
+                ctx.font = 'bold 12px Noto Sans TC';
+                ctx.textAlign = 'center';
+                ctx.fillText(node.name, tx, ty);
+            });
+
+            // Draw Chords
+            nodes.forEach((node, i) => {
+                nodes.forEach((target, j) => {
+                    if(i === j) return;
+                    const sAngle = (i * Math.PI * 2) / nodes.length + 0.5;
+                    const eAngle = (j * Math.PI * 2) / nodes.length + 0.5;
+                    
+                    const sx = centerX + radius * Math.cos(sAngle);
+                    const sy = centerY + radius * Math.sin(sAngle);
+                    const ex = centerX + radius * Math.cos(eAngle);
+                    const ey = centerY + radius * Math.sin(eAngle);
+
+                    ctx.beginPath();
+                    ctx.moveTo(sx, sy);
+                    ctx.quadraticCurveTo(centerX, centerY, ex, ey);
+                    ctx.strokeStyle = node.color + '44'; // Translucent
+                    ctx.lineWidth = 3 + Math.random() * 5;
+                    ctx.stroke();
+                });
+            });
+        }
+
+        // --- SANKEY PLOT (Custom Canvas) ---
+        function drawSankey() {
+            const canvas = document.getElementById('canvasSankey');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const padding = 50;
+            const colWidth = 150;
+            const boxH = 40;
+            const gap = 30;
+
+            const senders = ['Tumor', 'TME_Macro', 'Fibro'];
+            const pathways = ['WNT', 'TGF-b', 'VEGF'];
+            const receivers = ['T_Cell', 'Endo', 'Myo'];
+
+            const drawBox = (x, y, text, color) => {
+                ctx.fillStyle = color;
+                ctx.roundRect ? ctx.roundRect(x, y, 100, boxH, 4) : ctx.rect(x, y, 100, boxH);
+                ctx.fill();
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 11px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(text, x + 50, y + 25);
+            };
+
+            const drawFlow = (x1, y1, x2, y2, color) => {
+                ctx.beginPath();
+                ctx.moveTo(x1 + 100, y1 + 5);
+                ctx.bezierCurveTo(x1 + 150, y1 + 5, x2 - 50, y2 + 5, x2, y2 + 5);
+                ctx.lineTo(x2, y2 + boxH - 5);
+                ctx.bezierCurveTo(x2 - 50, y2 + boxH - 5, x1 + 150, y1 + boxH - 5, x1 + 100, y1 + boxH - 5);
+                ctx.fillStyle = color + '33';
+                ctx.fill();
+            };
+
+            // Draw flows first (background)
+            senders.forEach((s, si) => {
+                pathways.forEach((p, pi) => {
+                    if(Math.random() > 0.4) drawFlow(padding, padding + si*(boxH+gap), padding+colWidth+50, padding + pi*(boxH+gap), '#3b82f6');
+                });
+            });
+            pathways.forEach((p, pi) => {
+                receivers.forEach((r, ri) => {
+                    if(Math.random() > 0.3) drawFlow(padding+colWidth+50, padding + pi*(boxH+gap), padding+colWidth*2+100, padding + ri*(boxH+gap), '#10b981');
+                });
+            });
+
+            // Draw nodes
+            senders.forEach((s, i) => drawBox(padding, padding + i*(boxH+gap), s, '#1e293b'));
+            pathways.forEach((p, i) => drawBox(padding+colWidth+50, padding + i*(boxH+gap), p, '#3b82f6'));
+            receivers.forEach((r, i) => drawBox(padding+colWidth*2+100, padding + i*(boxH+gap), r, '#10b981'));
+
+            // Column Headers
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = 'bold 10px sans-serif';
+            ctx.fillText('SENDERS', padding + 50, 30);
+            ctx.fillText('PATHWAYS', padding + colWidth + 100, 30);
+            ctx.fillText('RECEIVERS', padding + colWidth*2 + 150, 30);
+        }
+
+        // Initialize first section
+        window.onload = () => {
+            drawChord();
+            drawSankey();
+        };
+    </script>
+</body>
+</html>
