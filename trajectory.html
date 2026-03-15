@@ -3,514 +3,689 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>scRNA-seq 軌跡與擬時序分析互動指南</title>
+    <title>scRNA-seq 軌跡與擬時序分析 (Trajectory & Pseudotime Analysis)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        /* Embedded CSS strictly for structural constraints & chart containers */
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        
-        .chart-container { 
-            position: relative; 
-            width: 100%; 
-            max-width: 800px; 
-            margin-left: auto; 
-            margin-right: auto; 
-            height: 40vh; 
-            max-height: 450px; 
-            min-height: 300px;
+        /* Embedded CSS strictly for structural constraints, custom scrollbar, and chart containers */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8fafc; /* Tailwind slate-50 */
+            color: #334155; /* Tailwind slate-700 */
         }
-        
-        .fade-in { animation: fadeIn 0.4s ease-in-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
         /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #f5f5f4; }
-        ::-webkit-scrollbar-thumb { background: #d6d3d1; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #a8a29e; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-        .nav-btn.active {
-            border-bottom: 2px solid #0f766e;
-            color: #0f766e;
+        /* Chart Container Requirements */
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 45vh;
+            min-height: 350px;
+            max-height: 500px;
+        }
+
+        /* Animations & Utilities */
+        .fade-in { animation: fadeIn 0.5s ease-out forwards; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .tab-btn.active {
+            border-bottom-width: 2px;
+            border-color: #0d9488; /* teal-600 */
+            color: #0f766e; /* teal-700 */
             font-weight: 600;
+        }
+
+        /* Dynamic dots for concept animation */
+        .sim-dot {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            transition: all 1.5s cubic-bezier(0.4, 0, 0.2, 1);
         }
     </style>
 </head>
-<body class="bg-stone-50 text-stone-800 overflow-x-hidden">
+<body class="overflow-x-hidden antialiased flex flex-col min-h-screen">
 
-    <!-- Chosen Palette: Warm Neutrals (Stone) with Teal Accents for a calm, scientific, and professional feel. -->
+    <!-- Chosen Palette: Slate (Neutrals) + Teal (Primary/Biology) + Amber/Rose (Accents for branches/warnings) -->
     
     <!-- Application Structure Plan: 
-    1.  **Header/Nav**: Fixed top navigation to allow quick switching between core concepts without scrolling through a massive document.
-    2.  **Overview Section (Home)**: Introduces the "Snapshot vs Movie" analogy with a conceptual interactive toggle.
-    3.  **Workflow Section**: An interactive horizontal timeline where clicking steps reveals detailed descriptions, turning a list into a digestible task-oriented view.
-    4.  **Topologies Section**: The core interactive visualizer. Uses Chart.js to dynamically render scatter plots simulating different cellular topologies (Linear, Branching, Circular, Tree) based on user selection.
-    5.  **Tools & Downstream**: A modular grid layout to compare algorithms and explain downstream concepts like BEAM and Branch Point Analysis. 
-    Rationale: This structure breaks down complex bioinformatics concepts into bite-sized, interactive modules. Users can explore non-linearly based on their current learning need.
+    The SPA uses a tabbed dashboard structure to prevent cognitive overload. 
+    1. '核心概念' (Core Concepts): Interactive animation to explain the shift from static snapshots to dynamic pseudotime.
+    2. '分析流程' (Workflow): A vertical stepper that acts as an interactive list, revealing details on click.
+    3. '軌跡拓撲' (Topologies): The core interactive chart utilizing Chart.js to simulate different cellular trajectories, allowing users to visually compare linear, branching, circular, and tree structures.
+    4. '工具與下游' (Tools & Downstream): A grid-based comparative view of algorithms and a section highlighting downstream challenges using warning cards.
+    This structure is chosen because it transforms a linear text document into an exploratory learning tool, prioritizing user engagement and conceptual understanding over simple reading.
     -->
 
     <!-- Visualization & Content Choices:
-    1.  **Concept Intro**: Text + CSS Toggle -> Goal: Inform -> Justification: Tangibly demonstrates "static" vs "dynamic" (the core problem of scRNA-seq). -> HTML/JS.
-    2.  **Workflow**: Interactive Steps -> Goal: Organize -> Justification: Better than a flat list; keeps cognitive load low by revealing one step at a time. -> HTML/Tailwind/JS.
-    3.  **Topologies**: Scatter Charts -> Goal: Compare/Visualize -> Justification: Best way to understand trajectory shapes is to see simulated cell distributions. -> Chart.js Canvas (NO SVG/Mermaid).
-    4.  **Tools Comparison**: Grid Cards -> Goal: Organize/Compare -> Justification: Makes reading algorithm pros/cons easier than a standard table. -> Tailwind HTML.
+    1. Snapshot vs Movie -> Goal: Inform/Change -> Method: Custom JS/CSS DOM manipulation of div "dots" to visually show random cells aligning into a trajectory. Justification: Most intuitive way to explain "pseudotime". No SVG used.
+    2. Workflow -> Goal: Organize -> Method: Interactive Stepper (HTML/CSS/JS). Justification: Breaks down the 5 steps into digestible chunks.
+    3. Topologies -> Goal: Compare/Relationships -> Method: Chart.js Scatter Plot simulating cell coordinates. Justification: Dynamic, allows visual comparison of data shapes (Linear vs Branching). NO SVG used.
+    4. Algorithms -> Goal: Compare -> Method: CSS Grid cards with visual tags. Justification: Easy scanning of pros/cons.
     -->
 
-    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. All visuals rely on Tailwind HTML structures, Unicode, and Chart.js Canvas. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. All visual elements are CSS, Unicode, or HTML5 Canvas (Chart.js). -->
 
-    <!-- Navigation -->
-    <nav class="bg-white shadow-sm sticky top-0 z-50">
-        <div class="max-w-6xl mx-auto px-4">
-            <div class="flex justify-between h-16">
-                <div class="flex items-center space-x-2">
-                    <span class="text-2xl text-teal-700 font-bold">🧬 scRNA-seq</span>
-                    <span class="text-stone-500 font-medium hidden sm:inline">軌跡與擬時序分析 (Pseudotime)</span>
+    <!-- Navigation Header -->
+    <nav class="bg-white shadow-sm sticky top-0 z-50 border-b border-slate-200">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex items-center gap-2">
+                    <span class="text-2xl text-teal-600">🧬</span>
+                    <span class="font-bold text-xl text-slate-800 tracking-tight">scRNA-seq 軌跡分析</span>
                 </div>
-                <div class="flex space-x-4 sm:space-x-8 items-center overflow-x-auto">
-                    <button class="nav-btn active px-1 py-4 text-sm font-medium text-stone-500 hover:text-teal-700 whitespace-nowrap" data-target="sec-overview">核心概念</button>
-                    <button class="nav-btn px-1 py-4 text-sm font-medium text-stone-500 hover:text-teal-700 whitespace-nowrap" data-target="sec-workflow">標準流程</button>
-                    <button class="nav-btn px-1 py-4 text-sm font-medium text-stone-500 hover:text-teal-700 whitespace-nowrap" data-target="sec-topologies">軌跡拓撲</button>
-                    <button class="nav-btn px-1 py-4 text-sm font-medium text-stone-500 hover:text-teal-700 whitespace-nowrap" data-target="sec-tools">工具與下游分析</button>
+                <div class="hidden sm:flex space-x-8 h-full" id="nav-tabs">
+                    <button class="tab-btn active px-3 py-2 text-sm font-medium text-slate-500 hover:text-teal-600 h-full flex items-center border-b-2 border-transparent transition-colors" data-target="section-concept">核心概念</button>
+                    <button class="tab-btn px-3 py-2 text-sm font-medium text-slate-500 hover:text-teal-600 h-full flex items-center border-b-2 border-transparent transition-colors" data-target="section-workflow">標準流程</button>
+                    <button class="tab-btn px-3 py-2 text-sm font-medium text-slate-500 hover:text-teal-600 h-full flex items-center border-b-2 border-transparent transition-colors" data-target="section-topology">軌跡拓撲</button>
+                    <button class="tab-btn px-3 py-2 text-sm font-medium text-slate-500 hover:text-teal-600 h-full flex items-center border-b-2 border-transparent transition-colors" data-target="section-tools">工具與下游</button>
+                </div>
+                <!-- Mobile menu button (Simplified for SPA) -->
+                <div class="sm:hidden flex items-center">
+                    <select id="mobile-nav" class="bg-slate-100 border border-slate-300 text-slate-700 rounded-md py-1 px-2 focus:outline-none focus:ring-2 focus:ring-teal-500">
+                        <option value="section-concept">核心概念</option>
+                        <option value="section-workflow">標準流程</option>
+                        <option value="section-topology">軌跡拓撲</option>
+                        <option value="section-tools">工具與下游</option>
+                    </select>
                 </div>
             </div>
         </div>
     </nav>
 
-    <!-- Main Content Area -->
-    <main class="max-w-6xl mx-auto px-4 py-8 relative">
+    <!-- Main Content Container -->
+    <main class="flex-grow max-w-6xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
 
-        <!-- SECTION 1: OVERVIEW -->
-        <section id="sec-overview" class="view-section fade-in">
-            <header class="mb-8">
-                <h1 class="text-4xl font-extrabold text-stone-900 mb-4">從「靜態快照」到「動態電影」</h1>
-                <p class="text-lg text-stone-600 max-w-3xl">
-                    在此區塊中，我們將介紹軌跡分析的核心理念。生物實驗通常只能捕捉細胞的靜態瞬間，但透過算法，我們能重建細胞的演變路徑。
+        <!-- SECTION: Concept -->
+        <section id="section-concept" class="view-section fade-in block">
+            <div class="mb-8">
+                <h1 class="text-3xl sm:text-4xl font-extrabold text-slate-900 mb-4">從「靜態快照」到「動態演化」</h1>
+                <p class="text-lg text-slate-600 max-w-3xl">
+                    在單細胞轉錄組測序（scRNA-seq）分析中，軌跡與擬時序分析是探索細胞動態演變過程的核心技術。此區塊解釋了如何從破壞性的測序數據中，重建細胞生命週期。
                 </p>
-            </header>
+            </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-                <div class="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
-                    <h2 class="text-2xl font-bold text-teal-800 mb-3">為什麼需要軌跡分析？</h2>
-                    <p class="mb-4 text-stone-600 leading-relaxed">
-                        在生物學實驗中，scRNA-seq 測序會裂解細胞，因此我們只能得到某個時間點的細胞狀態（靜態快照）。然而，在發育或分化過程中，細胞的狀態是連續變化的。
+            <div class="grid md:grid-cols-2 gap-8 items-stretch mb-8">
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <h2 class="text-xl font-bold text-teal-800 mb-3 flex items-center gap-2">📸 為什麼需要軌跡分析？</h2>
+                    <p class="text-slate-600 mb-4 leading-relaxed">
+                        在生物學實驗中，scRNA-seq 測序會裂解細胞，因此我們只能得到某個時間點的細胞狀態（<strong class="text-slate-800">靜態快照</strong>）。然而，在發育或分化過程中，細胞的狀態是連續變化的。
                     </p>
-                    <div class="bg-stone-50 p-4 rounded-lg border-l-4 border-teal-500 mb-4">
-                        <strong class="text-stone-800">核心假設：</strong> 群體中不同細胞正處於分化路徑上的不同階段。透過比較細胞間基因表達的相似性，我們可以推斷出它們的演變路徑。
+                    <div class="bg-teal-50 border-l-4 border-teal-500 p-4 rounded-r-md">
+                        <p class="text-sm text-teal-900">
+                            <strong>核心假設：</strong> 群體中不同細胞正處於分化路徑上的不同階段。透過比較細胞間基因表達的相似性，我們可以推斷出它們的演變路徑。
+                        </p>
                     </div>
                 </div>
 
-                <div class="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
-                    <h2 class="text-2xl font-bold text-teal-800 mb-3">什麼是擬時序 (Pseudotime)？</h2>
-                    <p class="mb-4 text-stone-600 leading-relaxed">
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <h2 class="text-xl font-bold text-teal-800 mb-3 flex items-center gap-2">⏱️ 什麼是擬時序 (Pseudotime)？</h2>
+                    <p class="text-slate-600 mb-4 leading-relaxed">
                         擬時序並不是現實世界中的「秒」或「小時」，而是衡量細胞在某個生物過程（如分化）中<strong>進展程度</strong>的一個相對數值。
                     </p>
-                    <ul class="list-disc pl-5 space-y-2 text-stone-600">
-                        <li>基於基因表達特徵計算出的抽象軸。</li>
-                        <li><strong>數值越小：</strong> 通常代表細胞越處於「起始狀態」（如幹細胞）。</li>
-                        <li><strong>數值越大：</strong> 代表越「成熟」。</li>
+                    <ul class="space-y-3 mt-4 text-sm text-slate-700">
+                        <li class="flex items-start gap-2">
+                            <span class="text-teal-500 mt-0.5">▪</span>
+                            <span>基於基因表達特徵計算出的抽象軸。</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-teal-500 mt-0.5">▪</span>
+                            <span><strong>數值越小：</strong> 通常代表細胞越處於「起始狀態」（如幹細胞）。</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-teal-500 mt-0.5">▪</span>
+                            <span><strong>數值越大：</strong> 代表越「成熟」或處於分化末端。</span>
+                        </li>
                     </ul>
                 </div>
             </div>
 
             <!-- Interactive Concept Widget -->
-            <div class="mt-8 bg-stone-900 text-white p-8 rounded-xl text-center shadow-lg">
-                <h3 class="text-xl font-semibold mb-2">概念互動展示</h3>
-                <p class="text-stone-400 mb-6">點擊按鈕，觀察數據如何從無序的點轉變為有意義的軌跡。</p>
-                
-                <div class="relative h-48 w-full max-w-lg mx-auto bg-stone-800 rounded-lg overflow-hidden border border-stone-700 flex items-center justify-center">
-                    <div id="concept-dots" class="absolute inset-0 transition-opacity duration-1000 opacity-100 flex flex-wrap content-center justify-center gap-2 p-4">
-                        <!-- Dots generated by JS -->
+            <div class="bg-slate-900 rounded-xl p-6 sm:p-8 shadow-lg text-white overflow-hidden relative">
+                <div class="relative z-10 flex flex-col items-center">
+                    <h3 class="text-2xl font-bold mb-2">概念互動：構建擬時序</h3>
+                    <p class="text-slate-400 mb-6 text-center max-w-xl">點擊下方按鈕，觀察如何將隨機捕獲的靜態細胞（散亂分佈）依據基因相似性排列成連續的發展軌跡（擬時序）。</p>
+                    
+                    <div class="w-full max-w-2xl h-48 bg-slate-800 rounded-lg border border-slate-700 relative mb-6 overflow-hidden" id="concept-canvas">
+                        <!-- JS will populate dots here -->
+                        <div id="pseudo-axis" class="absolute bottom-2 left-4 right-4 h-1 bg-gradient-to-r from-teal-400 to-rose-500 opacity-0 transition-opacity duration-1000"></div>
+                        <div id="pseudo-label-start" class="absolute bottom-4 left-4 text-xs font-bold text-teal-400 opacity-0 transition-opacity duration-1000">起始狀態 (Root)</div>
+                        <div id="pseudo-label-end" class="absolute bottom-4 right-4 text-xs font-bold text-rose-400 opacity-0 transition-opacity duration-1000">成熟狀態 (Terminal)</div>
                     </div>
-                    <div id="concept-line" class="absolute inset-0 transition-opacity duration-1000 opacity-0 bg-gradient-to-r from-teal-500 via-yellow-400 to-red-500" style="clip-path: polygon(0 45%, 100% 45%, 100% 55%, 0 55%);">
-                        <span class="absolute right-4 top-1/2 -translate-y-1/2 font-bold">分化方向 ➔</span>
-                    </div>
+
+                    <button id="toggle-concept-btn" class="bg-teal-600 hover:bg-teal-500 text-white px-6 py-3 rounded-full font-semibold transition-all transform active:scale-95 flex items-center gap-2 shadow-lg shadow-teal-500/30">
+                        <span>▶</span> 執行軌跡推斷 (推演擬時序)
+                    </button>
                 </div>
-                
-                <button id="btn-toggle-concept" class="mt-6 px-6 py-3 bg-teal-600 hover:bg-teal-500 text-white rounded-full font-bold transition-colors">
-                    播放：重建演化路徑 (Movie)
-                </button>
             </div>
         </section>
 
-        <!-- SECTION 2: WORKFLOW -->
-        <section id="sec-workflow" class="view-section hidden fade-in">
-            <header class="mb-8">
-                <h1 class="text-4xl font-extrabold text-stone-900 mb-4">標準分析工作流程</h1>
-                <p class="text-lg text-stone-600 max-w-3xl">
-                    了解軌跡分析的具體步驟。點擊下方的流程節點，可以查看每個步驟的技術細節與目標。
+        <!-- SECTION: Workflow -->
+        <section id="section-workflow" class="view-section hidden">
+            <div class="mb-8">
+                <h1 class="text-3xl sm:text-4xl font-extrabold text-slate-900 mb-4">標準工作流程</h1>
+                <p class="text-lg text-slate-600 max-w-3xl">
+                    軌跡分析有一套標準的計算流程。點擊左側的步驟，在右側查看該步驟的技術細節與目標。
                 </p>
-            </header>
+            </div>
 
-            <div class="flex flex-col md:flex-row gap-6">
-                <!-- Timeline/Steps -->
-                <div class="w-full md:w-1/3 flex flex-col space-y-2">
-                    <button class="step-btn w-full text-left px-4 py-3 bg-white border-2 border-teal-600 rounded-lg shadow-sm font-semibold text-teal-800 transition-all hover:bg-stone-50" data-step="1">
-                        1. 降維 (Dimensionality Reduction)
+            <div class="flex flex-col md:flex-row gap-6 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <!-- Stepper Navigation -->
+                <div class="md:w-1/3 flex flex-col border-l-2 border-slate-100 ml-3">
+                    <button class="workflow-step-btn relative pl-6 py-4 text-left group focus:outline-none" data-step="1">
+                        <span class="workflow-dot absolute -left-[9px] top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-4 border-white bg-teal-500 shadow transition-colors"></span>
+                        <h3 class="font-bold text-teal-700 text-lg group-hover:text-teal-600 transition-colors">1. 降維</h3>
+                        <p class="text-sm text-slate-500 hidden sm:block">Dimensionality Reduction</p>
                     </button>
-                    <button class="step-btn w-full text-left px-4 py-3 bg-white border border-stone-200 rounded-lg shadow-sm text-stone-600 hover:border-teal-300 transition-all" data-step="2">
-                        2. 構建圖/曲線 (Trajectory Building)
+                    <button class="workflow-step-btn relative pl-6 py-4 text-left group focus:outline-none" data-step="2">
+                        <span class="workflow-dot absolute -left-[9px] top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-4 border-white bg-slate-300 group-hover:bg-teal-300 transition-colors"></span>
+                        <h3 class="font-bold text-slate-600 text-lg group-hover:text-teal-600 transition-colors">2. 構建圖/曲線</h3>
+                        <p class="text-sm text-slate-500 hidden sm:block">Trajectory Building</p>
                     </button>
-                    <button class="step-btn w-full text-left px-4 py-3 bg-white border border-stone-200 rounded-lg shadow-sm text-stone-600 hover:border-teal-300 transition-all" data-step="3">
-                        3. 定義起點 (Root Selection)
+                    <button class="workflow-step-btn relative pl-6 py-4 text-left group focus:outline-none" data-step="3">
+                        <span class="workflow-dot absolute -left-[9px] top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-4 border-white bg-slate-300 group-hover:bg-teal-300 transition-colors"></span>
+                        <h3 class="font-bold text-slate-600 text-lg group-hover:text-teal-600 transition-colors">3. 定義起點</h3>
+                        <p class="text-sm text-slate-500 hidden sm:block">Root Selection</p>
                     </button>
-                    <button class="step-btn w-full text-left px-4 py-3 bg-white border border-stone-200 rounded-lg shadow-sm text-stone-600 hover:border-teal-300 transition-all" data-step="4">
-                        4. 分配擬時序值 (Assigning Pseudotime)
+                    <button class="workflow-step-btn relative pl-6 py-4 text-left group focus:outline-none" data-step="4">
+                        <span class="workflow-dot absolute -left-[9px] top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-4 border-white bg-slate-300 group-hover:bg-teal-300 transition-colors"></span>
+                        <h3 class="font-bold text-slate-600 text-lg group-hover:text-teal-600 transition-colors">4. 分配擬時序值</h3>
+                        <p class="text-sm text-slate-500 hidden sm:block">Assigning Pseudotime</p>
                     </button>
-                    <button class="step-btn w-full text-left px-4 py-3 bg-white border border-stone-200 rounded-lg shadow-sm text-stone-600 hover:border-teal-300 transition-all" data-step="5">
-                        5. 下游分析 (Downstream Analysis)
+                    <button class="workflow-step-btn relative pl-6 py-4 text-left group focus:outline-none" data-step="5">
+                        <span class="workflow-dot absolute -left-[9px] top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-4 border-white bg-slate-300 group-hover:bg-teal-300 transition-colors"></span>
+                        <h3 class="font-bold text-slate-600 text-lg group-hover:text-teal-600 transition-colors">5. 下游分析</h3>
+                        <p class="text-sm text-slate-500 hidden sm:block">Downstream Analysis</p>
                     </button>
                 </div>
 
-                <!-- Step Details -->
-                <div class="w-full md:w-2/3 bg-white p-8 rounded-xl shadow-md border border-stone-200 min-h-[300px] flex flex-col justify-center">
-                    <div id="step-content">
-                        <h2 class="text-3xl font-bold text-teal-800 mb-4">1. 降維 (Dimensionality Reduction)</h2>
-                        <div class="w-16 h-1 bg-teal-500 mb-4"></div>
-                        <p class="text-lg text-stone-700 leading-relaxed">
-                            將數萬個基因的表達矩陣投射到低維空間（如 UMAP, t-SNE 或 Diffusion Maps）。這一步至關重要，它能使基因表達相似的細胞在空間中聚集在一起，從而暴露出潛在的分化趨勢與連續性。
+                <!-- Stepper Content -->
+                <div class="md:w-2/3 bg-slate-50 rounded-lg p-6 flex flex-col justify-center min-h-[250px]" id="workflow-content-area">
+                    <!-- Default content (Step 1) -->
+                    <div class="fade-in">
+                        <div class="inline-block bg-teal-100 text-teal-800 px-3 py-1 rounded-full text-xs font-bold mb-4 tracking-wider">STEP 1</div>
+                        <h3 class="text-2xl font-bold text-slate-800 mb-3">降維 (Dimensionality Reduction)</h3>
+                        <p class="text-slate-600 leading-relaxed text-lg">
+                            將數萬個基因的表達矩陣投射到低維空間（如 UMAP, t-SNE 或 Diffusion Maps）。這一步非常關鍵，它能使基因表達特徵相似的細胞在二維或三維空間中聚集在一起，從而暴露出潛在的分化趨勢與物理結構。
                         </p>
                     </div>
                 </div>
             </div>
         </section>
 
-        <!-- SECTION 3: TOPOLOGIES -->
-        <section id="sec-topologies" class="view-section hidden fade-in">
-            <header class="mb-6">
-                <h1 class="text-4xl font-extrabold text-stone-900 mb-4">常見的軌跡拓撲類型</h1>
-                <p class="text-lg text-stone-600 max-w-3xl">
-                    不同的生物過程會呈現出不同的空間結構（拓撲）。利用下方的互動圖表，點擊不同類型以觀察細胞群如何分佈與演化。
+        <!-- SECTION: Topologies -->
+        <section id="section-topology" class="view-section hidden">
+            <div class="mb-6">
+                <h1 class="text-3xl sm:text-4xl font-extrabold text-slate-900 mb-4">常見的軌跡拓撲類型</h1>
+                <p class="text-lg text-slate-600 max-w-3xl">
+                    不同的生物學過程對應不同的軌跡結構。點擊下方按鈕，在圖表中模擬觀察不同類型的細胞群體分佈拓撲。顏色從藍色到紅色代表擬時序（Pseudotime）的推進。
                 </p>
-            </header>
+            </div>
 
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-stone-200 mb-6">
-                <!-- Topology Selectors -->
-                <div class="flex flex-wrap justify-center gap-3 mb-6">
-                    <button class="topo-btn px-4 py-2 bg-teal-600 text-white rounded-md font-medium shadow-sm transition-colors" data-topo="linear">線性 (Linear)</button>
-                    <button class="topo-btn px-4 py-2 bg-stone-200 text-stone-700 hover:bg-stone-300 rounded-md font-medium transition-colors" data-topo="bifurcation">分叉 (Bifurcation)</button>
-                    <button class="topo-btn px-4 py-2 bg-stone-200 text-stone-700 hover:bg-stone-300 rounded-md font-medium transition-colors" data-topo="circular">循環 (Circular)</button>
-                    <button class="topo-btn px-4 py-2 bg-stone-200 text-stone-700 hover:bg-stone-300 rounded-md font-medium transition-colors" data-topo="tree">樹狀/複雜圖 (Tree)</button>
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                
+                <!-- Interaction Controls -->
+                <div class="flex flex-wrap gap-2 mb-6 justify-center">
+                    <button class="topo-btn active bg-teal-600 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors" data-topo="linear">線性 (Linear)</button>
+                    <button class="topo-btn bg-slate-100 text-slate-700 hover:bg-slate-200 px-4 py-2 rounded-md font-medium text-sm transition-colors" data-topo="bifurcation">分叉 (Bifurcation)</button>
+                    <button class="topo-btn bg-slate-100 text-slate-700 hover:bg-slate-200 px-4 py-2 rounded-md font-medium text-sm transition-colors" data-topo="circular">循環 (Circular)</button>
+                    <button class="topo-btn bg-slate-100 text-slate-700 hover:bg-slate-200 px-4 py-2 rounded-md font-medium text-sm transition-colors" data-topo="tree">樹狀 (Tree)</button>
                 </div>
 
-                <!-- Chart Container -->
+                <!-- Dynamic Text Context -->
+                <div class="text-center mb-6 h-12 flex items-center justify-center">
+                    <p id="topo-description" class="text-slate-700 font-medium">
+                        <!-- Filled by JS -->
+                    </p>
+                </div>
+
+                <!-- Chart Container (Strict styling applied via CSS class) -->
                 <div class="chart-container">
                     <canvas id="topologyChart"></canvas>
-                </div>
-                
-                <div id="topo-description" class="mt-6 text-center text-stone-600 bg-stone-50 p-4 rounded-lg">
-                    <strong>線性 (Linear)：</strong> 細胞從狀態 A 直接演變為狀態 B（例如：前體細胞 → 成熟細胞）。
                 </div>
             </div>
         </section>
 
-        <!-- SECTION 4: TOOLS & DOWNSTREAM -->
-        <section id="sec-tools" class="view-section hidden fade-in">
-            <header class="mb-8">
-                <h1 class="text-4xl font-extrabold text-stone-900 mb-4">工具選擇與下游分析</h1>
-                <p class="text-lg text-stone-600 max-w-3xl">
-                    成功構建軌跡只是第一步。本區塊總結了主流的分析算法，以及完成軌跡構建後如何深入挖掘生物學意義與潛在挑戰。
+        <!-- SECTION: Tools & Downstream -->
+        <section id="section-tools" class="view-section hidden">
+            <div class="mb-8">
+                <h1 class="text-3xl sm:text-4xl font-extrabold text-slate-900 mb-4">工具選擇與下游分析</h1>
+                <p class="text-lg text-slate-600 max-w-3xl">
+                    軌跡構建只是起點。了解各類算法的適用場景，並深入進行基因動態分析與避開常見陷阱，才能挖掘出真正的生物學意義。
                 </p>
-            </header>
+            </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                
-                <!-- Tools Table/Grid -->
+            <div class="grid lg:grid-cols-2 gap-8">
+                <!-- Algorithms Grid -->
                 <div>
-                    <h2 class="text-2xl font-bold text-teal-800 mb-4 border-b-2 border-stone-200 pb-2">主流分析工具與算法</h2>
-                    <div class="space-y-4">
-                        <!-- Tool 1 -->
-                        <div class="bg-white p-4 rounded-lg shadow-sm border border-stone-200 hover:border-teal-400 transition-colors">
-                            <div class="flex justify-between items-center mb-2">
-                                <h3 class="font-bold text-lg text-stone-800">Monocle3</h3>
-                                <span class="bg-teal-100 text-teal-800 text-xs px-2 py-1 rounded font-bold">主流推薦</span>
+                    <h2 class="text-2xl font-bold text-slate-800 mb-4 flex items-center gap-2">🧰 主流分析工具與算法</h2>
+                    <div class="grid grid-cols-1 gap-4">
+                        <!-- Monocle3 -->
+                        <div class="bg-white border border-slate-200 p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
+                            <div class="absolute top-0 right-0 bg-teal-100 text-teal-800 text-xs font-bold px-2 py-1 rounded-bl-lg">最主流推薦</div>
+                            <h3 class="font-bold text-lg text-slate-800 mb-1">Monocle3</h3>
+                            <p class="text-sm text-slate-600 mb-2">基於學習主圖（Principal Graph），支持複雜分支與多個起點。</p>
+                            <div class="text-xs bg-slate-50 p-2 rounded text-slate-700 border border-slate-100">
+                                <strong>適用場景：</strong> 大規模數據與複雜分枝結構。
                             </div>
-                            <p class="text-sm text-stone-600 mb-2">基於學習主圖（Principal Graph），支持複雜分支與多個起點。</p>
-                            <p class="text-xs text-stone-500 font-medium">👉 適合處理大規模數據與複雜分枝。</p>
                         </div>
-                        <!-- Tool 2 -->
-                        <div class="bg-white p-4 rounded-lg shadow-sm border border-stone-200 hover:border-teal-400 transition-colors">
-                            <h3 class="font-bold text-lg text-stone-800 mb-2">Slingshot</h3>
-                            <p class="text-sm text-stone-600 mb-2">基於聚類中心構建最小生成樹，再擬合平滑曲線。</p>
-                            <p class="text-xs text-stone-500 font-medium">👉 對聚類結果依賴性強，結果較穩定。</p>
-                        </div>
-                        <!-- Tool 3 -->
-                        <div class="bg-white p-4 rounded-lg shadow-sm border border-stone-200 hover:border-teal-400 transition-colors">
-                            <h3 class="font-bold text-lg text-stone-800 mb-2">PAGA & Diffusion Maps</h3>
-                            <p class="text-sm text-stone-600 mb-2">PAGA 估計群體連接強度；Diffusion Maps 捕捉細微連續變化。</p>
-                            <p class="text-xs text-stone-500 font-medium">👉 PAGA 適合極大數據；Diffusion Maps 適合單一線性。</p>
-                        </div>
-                        <!-- Tool 4 -->
-                        <div class="bg-white p-4 rounded-lg shadow-sm border border-stone-200 hover:border-teal-400 transition-colors border-l-4 border-l-orange-400">
-                            <div class="flex justify-between items-center mb-2">
-                                <h3 class="font-bold text-lg text-stone-800">scVelo / Velocyto</h3>
-                                <span class="bg-orange-100 text-orange-800 text-xs px-2 py-1 rounded font-bold">具備方向性</span>
+                        
+                        <!-- scVelo -->
+                        <div class="bg-white border border-slate-200 border-l-4 border-l-rose-400 p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow relative">
+                            <div class="absolute top-2 right-2 text-xs font-bold text-rose-500 bg-rose-50 px-2 py-1 rounded">具備方向性</div>
+                            <h3 class="font-bold text-lg text-slate-800 mb-1">scVelo / Velocyto</h3>
+                            <p class="text-sm text-slate-600 mb-2"><strong>RNA 速率分析 (RNA Velocity)</strong>。利用未剪接與已剪接 mRNA 的比例推斷未來狀態。</p>
+                            <div class="text-xs bg-slate-50 p-2 rounded text-slate-700 border border-slate-100">
+                                <strong>優勢：</strong> 不需要手動指定起點即可預測演化趨勢向量。
                             </div>
-                            <p class="text-sm text-stone-600 mb-2">RNA 速率分析。利用未剪接與已剪接 mRNA 比例推斷未來狀態。</p>
-                            <p class="text-xs text-stone-500 font-medium">👉 不需要手動指定起點即可預測演化趨勢。</p>
+                        </div>
+
+                        <!-- Slingshot & Others -->
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="bg-white border border-slate-200 p-4 rounded-lg shadow-sm">
+                                <h3 class="font-bold text-md text-slate-800 mb-1">Slingshot</h3>
+                                <p class="text-xs text-slate-600 mb-2">基於聚類中心構建最小生成樹，擬合平滑曲線。</p>
+                                <p class="text-xs text-teal-600 font-semibold">結果穩定，依賴聚類</p>
+                            </div>
+                            <div class="bg-white border border-slate-200 p-4 rounded-lg shadow-sm">
+                                <h3 class="font-bold text-md text-slate-800 mb-1">PAGA</h3>
+                                <p class="text-xs text-slate-600 mb-2">估計細胞群體間的連接強度，處理混合拓撲。</p>
+                                <p class="text-xs text-teal-600 font-semibold">適合極大/極複雜數據</p>
+                            </div>
+                        </div>
+                        <div class="bg-white border border-slate-200 p-4 rounded-lg shadow-sm">
+                                <h3 class="font-bold text-md text-slate-800 mb-1">Diffusion Maps</h3>
+                                <p class="text-xs text-slate-600">利用擴散距離捕捉細微連續變化。適合單一、線性的分化路徑。</p>
                         </div>
                     </div>
                 </div>
 
                 <!-- Downstream & Challenges -->
-                <div class="flex flex-col space-y-6">
-                    <div class="bg-teal-50 p-6 rounded-xl border border-teal-100">
-                        <h2 class="text-2xl font-bold text-teal-800 mb-4">軌跡分析後的下游研究</h2>
-                        <ul class="space-y-4 text-stone-700">
-                            <li>
-                                <strong class="block text-teal-900 mb-1">A. 擬時序差異基因分析 (BEAM)</strong>
-                                尋找表達水平隨擬時序變化的基因。分類為：早期驅動基因 (引發)、分支特異性基因 (決定命運)、末端標誌基因 (完成特徵)。
-                            </li>
-                            <li>
-                                <strong class="block text-teal-900 mb-1">B. 分支點分析 (Branch Point Analysis)</strong>
-                                在分叉點之前，哪些基因的表達失衡導致了細胞選擇不同路徑？這對研究命運決定機制至關重要。
-                            </li>
-                            <li>
-                                <strong class="block text-teal-900 mb-1">C. 轉錄調控網絡推斷</strong>
-                                結合 TF（轉錄因子）分析（如 SCENIC），觀察調控模塊隨時間的動態切換。
-                            </li>
-                        </ul>
+                <div class="flex flex-col gap-6">
+                    <!-- Downstream Analysis -->
+                    <div class="bg-teal-800 text-white p-6 rounded-xl shadow-md">
+                        <h2 class="text-xl font-bold mb-4 flex items-center gap-2">🔬 軌跡分析後的下游研究</h2>
+                        <div class="space-y-4">
+                            <div class="border-b border-teal-700 pb-3">
+                                <h4 class="font-semibold text-teal-200 mb-1">A. 擬時序差異基因分析 (BEAM)</h4>
+                                <p class="text-sm text-teal-50">尋找表達水平隨擬時序變化的動態基因。包含：早期驅動基因 (起始)、分支特異性基因 (命運選擇)、末端標誌基因 (成熟特徵)。</p>
+                            </div>
+                            <div class="border-b border-teal-700 pb-3">
+                                <h4 class="font-semibold text-teal-200 mb-1">B. 分支點分析 (Branch Point Analysis)</h4>
+                                <p class="text-sm text-teal-50">在分叉點之前，分析哪些基因的表達失衡導致了細胞選擇路徑 A 而非路徑 B，揭示命運決定機制。</p>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-teal-200 mb-1">C. 轉錄調控網絡推斷</h4>
+                                <p class="text-sm text-teal-50">結合 TF（轉錄因子）分析（如 SCENIC），觀察調控網絡隨時間的動態切換。</p>
+                            </div>
+                        </div>
                     </div>
 
-                    <div class="bg-red-50 p-6 rounded-xl border border-red-100">
-                        <h2 class="text-xl font-bold text-red-800 mb-3">⚠️ 注意事項與挑戰</h2>
-                        <ul class="list-disc pl-5 space-y-1 text-sm text-stone-700 marker:text-red-500">
-                            <li><strong>過度解釋：</strong> 算法總能跑出路徑，但需實驗（如 lineage tracing）驗證其生物學意義。</li>
-                            <li><strong>數據缺失 (Dropout)：</strong> 單細胞數據噪音可能導致軌跡斷裂或虛假分支。</li>
-                            <li><strong>密度偏差：</strong> 中間態細胞數量極少時，算法可能無法正確連接。</li>
-                            <li><strong>根節點指定錯誤：</strong> 會導致整個擬時序的方向完全相反。</li>
+                    <!-- Challenges / Warnings -->
+                    <div class="bg-amber-50 border border-amber-200 p-6 rounded-xl">
+                        <h2 class="text-xl font-bold text-amber-900 mb-3 flex items-center gap-2">⚠️ 注意事項與挑戰</h2>
+                        <ul class="space-y-2">
+                            <li class="flex items-start gap-2 text-sm text-amber-800">
+                                <span class="font-bold text-amber-600">▪</span>
+                                <span><strong>過度解釋：</strong> 算法總能畫出一條路徑，但其生物學意義必須通過實驗（如 lineage tracing）驗證。</span>
+                            </li>
+                            <li class="flex items-start gap-2 text-sm text-amber-800">
+                                <span class="font-bold text-amber-600">▪</span>
+                                <span><strong>數據缺失 (Dropout)：</strong> scRNA-seq 的噪音可能導致軌跡斷裂或產生虛假的分支。</span>
+                            </li>
+                            <li class="flex items-start gap-2 text-sm text-amber-800">
+                                <span class="font-bold text-amber-600">▪</span>
+                                <span><strong>密度偏差：</strong> 若中間過渡態細胞數量極少，算法可能無法將起點與終點正確連接。</span>
+                            </li>
+                            <li class="flex items-start gap-2 text-sm text-amber-800">
+                                <span class="font-bold text-amber-600">▪</span>
+                                <span><strong>根節點指定：</strong> 錯誤的起點會導致整個擬時序的生物學方向完全相反。</span>
+                            </li>
                         </ul>
                     </div>
                 </div>
-
             </div>
         </section>
 
     </main>
 
+    <!-- App JavaScript Logic -->
     <script>
-        // --- 1. Navigation Logic ---
-        const navBtns = document.querySelectorAll('.nav-btn');
-        const sections = document.querySelectorAll('.view-section');
+        document.addEventListener('DOMContentLoaded', () => {
 
-        navBtns.forEach(btn => {
-            btn.addEventListener('click', () => {
-                // Update active button state
-                navBtns.forEach(b => {
-                    b.classList.remove('active', 'border-b-2', 'border-teal-600', 'text-teal-700', 'font-semibold');
-                    b.classList.add('text-stone-500');
+            // --- Navigation Logic ---
+            const tabBtns = document.querySelectorAll('.tab-btn');
+            const sections = document.querySelectorAll('.view-section');
+            const mobileNav = document.getElementById('mobile-nav');
+
+            function switchSection(targetId) {
+                // Update tabs
+                tabBtns.forEach(btn => {
+                    if (btn.getAttribute('data-target') === targetId) {
+                        btn.classList.add('active', 'border-teal-600', 'text-teal-700', 'font-semibold');
+                        btn.classList.remove('border-transparent', 'text-slate-500');
+                    } else {
+                        btn.classList.remove('active', 'border-teal-600', 'text-teal-700', 'font-semibold');
+                        btn.classList.add('border-transparent', 'text-slate-500');
+                    }
                 });
-                btn.classList.add('active', 'border-b-2', 'border-teal-600', 'text-teal-700', 'font-semibold');
-                btn.classList.remove('text-stone-500');
 
-                // Switch sections
-                const targetId = btn.getAttribute('data-target');
+                // Update mobile select
+                mobileNav.value = targetId;
+
+                // Toggle sections with animation
                 sections.forEach(sec => {
                     if (sec.id === targetId) {
                         sec.classList.remove('hidden');
-                        // Small trick to re-trigger fade animation
                         sec.classList.remove('fade-in');
-                        void sec.offsetWidth; // trigger reflow
+                        void sec.offsetWidth; // Trigger reflow for animation restart
                         sec.classList.add('fade-in');
                     } else {
                         sec.classList.add('hidden');
                     }
                 });
+            }
+
+            tabBtns.forEach(btn => {
+                btn.addEventListener('click', () => switchSection(btn.getAttribute('data-target')));
             });
-        });
 
-        // --- 2. Concept Interactive Widget (Overview) ---
-        const dotContainer = document.getElementById('concept-dots');
-        const btnToggleConcept = document.getElementById('btn-toggle-concept');
-        const conceptLine = document.getElementById('concept-line');
-        
-        // Generate random dots to simulate "snapshots"
-        for(let i=0; i<40; i++) {
-            const dot = document.createElement('div');
-            dot.className = 'w-3 h-3 rounded-full bg-stone-500 opacity-60 m-1';
-            dotContainer.appendChild(dot);
-        }
+            mobileNav.addEventListener('change', (e) => switchSection(e.target.value));
 
-        let isMovieMode = false;
-        btnToggleConcept.addEventListener('click', () => {
-            isMovieMode = !isMovieMode;
-            if(isMovieMode) {
-                dotContainer.style.opacity = '0.1';
-                conceptLine.style.opacity = '1';
-                btnToggleConcept.innerText = '還原：靜態快照 (Snapshots)';
-                btnToggleConcept.classList.replace('bg-teal-600', 'bg-stone-600');
-                btnToggleConcept.classList.replace('hover:bg-teal-500', 'hover:bg-stone-500');
-            } else {
-                dotContainer.style.opacity = '1';
-                conceptLine.style.opacity = '0';
-                btnToggleConcept.innerText = '播放：重建演化路徑 (Movie)';
-                btnToggleConcept.classList.replace('bg-stone-600', 'bg-teal-600');
-                btnToggleConcept.classList.replace('hover:bg-stone-500', 'hover:bg-teal-500');
-            }
-        });
-
-        // --- 3. Workflow Timeline Logic ---
-        const workflowData = {
-            "1": {
-                title: "1. 降維 (Dimensionality Reduction)",
-                content: "將數萬個基因的表達矩陣投射到低維空間（如 UMAP, t-SNE 或 Diffusion Maps），使相似的細胞聚集在一起，暴露出潛在的分化趨勢。"
-            },
-            "2": {
-                title: "2. 構建圖/曲線 (Trajectory Building)",
-                content: "使用算法（如最小生成樹 MST 或主曲線 Principal Curves）連接各細胞群，形成一條或多條代表分化可能性的「路徑」。"
-            },
-            "3": {
-                title: "3. 定義起點 (Root Selection)",
-                content: "算法通常無法自動判斷哪端是起點，需要研究者根據生物學背景（例如已知的幹細胞標誌基因表達）手動指定起始細胞或集群作為「Root」。"
-            },
-            "4": {
-                title: "4. 分配擬時序值 (Assigning Pseudotime)",
-                content: "計算每個細胞沿著構建好的路徑到起點的幾何距離。距離越短，擬時序值越小（早期階段）；距離越長，數值越大（成熟階段）。"
-            },
-            "5": {
-                title: "5. 下游分析 (Downstream Analysis)",
-                content: "尋找隨擬時序變化的動態基因（Time-series genes），分析細胞命運分叉點，以及重建轉錄因子調控網絡。"
-            }
-        };
-
-        const stepBtns = document.querySelectorAll('.step-btn');
-        const stepContentArea = document.getElementById('step-content');
-
-        stepBtns.forEach(btn => {
-            btn.addEventListener('click', () => {
-                // Reset styling
-                stepBtns.forEach(b => {
-                    b.classList.remove('border-teal-600', 'border-2', 'font-semibold', 'text-teal-800');
-                    b.classList.add('border-stone-200', 'border', 'text-stone-600');
-                });
-                // Set active style
-                btn.classList.add('border-teal-600', 'border-2', 'font-semibold', 'text-teal-800');
-                btn.classList.remove('border-stone-200', 'border', 'text-stone-600');
-
-                // Update content
-                const step = btn.getAttribute('data-step');
-                const data = workflowData[step];
-                stepContentArea.innerHTML = `
-                    <h2 class="text-3xl font-bold text-teal-800 mb-4">${data.title}</h2>
-                    <div class="w-16 h-1 bg-teal-500 mb-4"></div>
-                    <p class="text-lg text-stone-700 leading-relaxed fade-in">${data.content}</p>
-                `;
-            });
-        });
-
-        // --- 4. Topology Chart.js Visualization ---
-        const ctx = document.getElementById('topologyChart').getContext('2d');
-        let topoChart = null;
-
-        // Data Generators for Simulation
-        function generateLinear() {
-            return Array.from({length: 200}, () => ({x: Math.random() * 10, y: Math.random() * 2 + 4 + (Math.random()*0.5)}));
-        }
-        function generateBifurcation() {
-            let data = [];
-            for(let i=0; i<100; i++) { // Trunk
-                data.push({x: Math.random() * 4, y: 5 + (Math.random()-0.5)});
-            }
-            for(let i=0; i<70; i++) { // Branch 1 (Up)
-                let x = 4 + Math.random() * 5;
-                data.push({x: x, y: 5 + (x-4)*1.5 + (Math.random()-0.5)});
-            }
-            for(let i=0; i<70; i++) { // Branch 2 (Down)
-                let x = 4 + Math.random() * 5;
-                data.push({x: x, y: 5 - (x-4)*1.5 + (Math.random()-0.5)});
-            }
-            return data;
-        }
-        function generateCircular() {
-            return Array.from({length: 200}, () => {
-                const angle = Math.random() * Math.PI * 2;
-                const r = 3 + (Math.random() - 0.5);
-                return { x: 5 + r * Math.cos(angle), y: 5 + r * Math.sin(angle) };
-            });
-        }
-        function generateTree() {
-            let data = generateBifurcation(); // Start with bifurcation
-            for(let i=0; i<50; i++) { // Add sub-branch to Branch 1
-                let x = 7 + Math.random() * 3;
-                data.push({x: x, y: 9.5 + (x-7)*0.2 + (Math.random()-0.5)});
-            }
-            return data;
-        }
-
-        const topoDescriptions = {
-            'linear': '<strong>線性 (Linear)：</strong> 細胞從狀態 A 直接演變為狀態 B（例如：前體細胞 → 成熟細胞）。圖中顯示單一發展方向。',
-            'bifurcation': '<strong>分叉 (Bifurcation/Branching)：</strong> 細胞在某個點面臨「命運選擇」，分化為兩種不同的細胞類型（例如：造血幹細胞分化為髓系或淋巴系）。',
-            'circular': '<strong>循環 (Circular)：</strong> 描述細胞週期（Cell Cycle）或某些具有週期性特徵的生理過程。細胞狀態最終會回到原點。',
-            'tree': '<strong>樹狀/複雜圖 (Tree/Complex Graph)：</strong> 包含多個分支與交叉，適用於複雜的組織發育研究，展示多種終端細胞類型。'
-        };
-
-        function renderChart(type) {
-            let dataset = [];
-            let pointColor = 'rgba(15, 118, 110, 0.6)'; // Teal
+            // --- Module 1: Concept Animation Logic ---
+            const conceptCanvas = document.getElementById('concept-canvas');
+            const toggleConceptBtn = document.getElementById('toggle-concept-btn');
+            const pseudoAxis = document.getElementById('pseudo-axis');
+            const pseudoLabelStart = document.getElementById('pseudo-label-start');
+            const pseudoLabelEnd = document.getElementById('pseudo-label-end');
             
-            if(type === 'linear') dataset = generateLinear();
-            if(type === 'bifurcation') { dataset = generateBifurcation(); pointColor = 'rgba(217, 119, 6, 0.6)'; } // Amber
-            if(type === 'circular') { dataset = generateCircular(); pointColor = 'rgba(59, 130, 246, 0.6)'; } // Blue
-            if(type === 'tree') { dataset = generateTree(); pointColor = 'rgba(139, 92, 246, 0.6)'; } // Purple
+            const numDots = 40;
+            const dots = [];
+            let isDynamic = false;
 
-            if(topoChart) topoChart.destroy();
+            // Initialize dots randomly
+            for (let i = 0; i < numDots; i++) {
+                const dot = document.createElement('div');
+                dot.className = 'sim-dot bg-slate-400';
+                
+                // Random starting positions (Static Snapshot)
+                const startX = Math.random() * 90 + 5; // 5% to 95%
+                const startY = Math.random() * 80 + 10;
+                
+                dot.style.left = `${startX}%`;
+                dot.style.top = `${startY}%`;
+                
+                // Store target positions for Dynamic (Pseudotime) state
+                // Sort by X conceptually
+                const targetX = (i / numDots) * 80 + 10;
+                // Add a little sine wave noise to make it look like a trajectory
+                const targetY = 50 + Math.sin(i * 0.2) * 15 + (Math.random() * 10 - 5);
+                
+                dot.dataset.startX = startX;
+                dot.dataset.startY = startY;
+                dot.dataset.targetX = targetX;
+                dot.dataset.targetY = targetY;
+                
+                // Assign color based on position in trajectory
+                const ratio = i / numDots;
+                // Simple color interpolation logic for the dots
+                const r = Math.floor(45 + ratio * (244 - 45)); // Teal to Rose
+                const g = Math.floor(212 - ratio * (212 - 63));
+                const b = Math.floor(191 - ratio * (191 - 94));
+                dot.dataset.color = `rgb(${r}, ${g}, ${b})`;
 
-            topoChart = new Chart(ctx, {
-                type: 'scatter',
-                data: {
-                    datasets: [{
-                        label: '模擬細胞',
-                        data: dataset,
-                        backgroundColor: pointColor,
-                        borderColor: pointColor.replace('0.6', '1'),
-                        borderWidth: 1,
-                        pointRadius: 4,
-                        pointHoverRadius: 6
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: { label: () => '細胞狀態點' }
-                        }
-                    },
-                    scales: {
-                        x: { display: false, min: -1, max: 11 },
-                        y: { display: false, min: -1, max: 15 }
-                    },
-                    animation: {
-                        duration: 800,
-                        easing: 'easeOutQuart'
-                    }
+                conceptCanvas.appendChild(dot);
+                dots.push(dot);
+            }
+
+            toggleConceptBtn.addEventListener('click', () => {
+                isDynamic = !isDynamic;
+                
+                if (isDynamic) {
+                    toggleConceptBtn.innerHTML = '<span>↺</span> 還原為靜態快照';
+                    toggleConceptBtn.classList.replace('bg-teal-600', 'bg-slate-600');
+                    toggleConceptBtn.classList.replace('hover:bg-teal-500', 'hover:bg-slate-500');
+                    toggleConceptBtn.classList.replace('shadow-teal-500/30', 'shadow-slate-500/30');
+                    
+                    pseudoAxis.style.opacity = '1';
+                    pseudoLabelStart.style.opacity = '1';
+                    pseudoLabelEnd.style.opacity = '1';
+
+                    dots.forEach((dot) => {
+                        dot.style.left = `${dot.dataset.targetX}%`;
+                        dot.style.top = `${dot.dataset.targetY}%`;
+                        dot.style.backgroundColor = dot.dataset.color;
+                    });
+                } else {
+                    toggleConceptBtn.innerHTML = '<span>▶</span> 執行軌跡推斷 (推演擬時序)';
+                    toggleConceptBtn.classList.replace('bg-slate-600', 'bg-teal-600');
+                    toggleConceptBtn.classList.replace('hover:bg-slate-500', 'hover:bg-teal-500');
+                    toggleConceptBtn.classList.replace('shadow-slate-500/30', 'shadow-teal-500/30');
+
+                    pseudoAxis.style.opacity = '0';
+                    pseudoLabelStart.style.opacity = '0';
+                    pseudoLabelEnd.style.opacity = '0';
+
+                    dots.forEach((dot) => {
+                        dot.style.left = `${dot.dataset.startX}%`;
+                        dot.style.top = `${dot.dataset.startY}%`;
+                        dot.style.backgroundColor = '#94a3b8'; // slate-400
+                    });
                 }
             });
-            
-            document.getElementById('topo-description').innerHTML = topoDescriptions[type];
-        }
 
-        // Initialize default chart
-        renderChart('linear');
 
-        // Topology Button Logic
-        const topoBtns = document.querySelectorAll('.topo-btn');
-        topoBtns.forEach(btn => {
-            btn.addEventListener('click', () => {
-                // Style updates
-                topoBtns.forEach(b => {
-                    b.classList.remove('bg-teal-600', 'text-white');
-                    b.classList.add('bg-stone-200', 'text-stone-700');
+            // --- Module 2: Workflow Stepper Logic ---
+            const workflowData = {
+                "1": { title: "降維 (Dimensionality Reduction)", content: "將數萬個基因的表達矩陣投射到低維空間（如 UMAP, t-SNE 或 Diffusion Maps）。這一步非常關鍵，它能使基因表達特徵相似的細胞在空間中聚集在一起，從而暴露出潛在的分化趨勢與物理結構。" },
+                "2": { title: "構建圖/曲線 (Trajectory Building)", content: "使用圖論算法（如最小生成樹 MST）或主曲線（Principal Curves）算法，連接降維空間中的各個細胞群集，形成一條或多條代表分化可能性的骨架「路徑」。" },
+                "3": { title: "定義起點 (Root Selection)", content: "算法純靠數學無法自動判斷哪一端才是真正的生物學起點。需要研究者根據已知的生物學背景知識（例如：幹細胞標誌基因的高表達區域），手動指定網絡中的「Root」節點。" },
+                "4": { title: "分配擬時序值 (Assigning Pseudotime)", content: "確定起點後，算法計算每個細胞沿著構建好的拓撲骨架路徑到達起點的幾何距離。距離起點越短，分配的擬時序值越小（處於早期）；距離越長，數值越大（處於成熟期）。" },
+                "5": { title: "下游分析 (Downstream Analysis)", content: "獲取擬時序後，可以開始尋找隨擬時序變化的動態基因群（Time-series genes），分析細胞命運選擇的分支點（Branch points），並推斷轉錄因子（TF）的調控網絡變化。" }
+            };
+
+            const workflowBtns = document.querySelectorAll('.workflow-step-btn');
+            const workflowContentArea = document.getElementById('workflow-content-area');
+
+            workflowBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const step = btn.getAttribute('data-step');
+                    
+                    // Reset styling
+                    workflowBtns.forEach(b => {
+                        const h3 = b.querySelector('h3');
+                        const dot = b.querySelector('.workflow-dot');
+                        h3.classList.remove('text-teal-700');
+                        h3.classList.add('text-slate-600');
+                        dot.classList.remove('bg-teal-500');
+                        dot.classList.add('bg-slate-300');
+                    });
+
+                    // Active styling
+                    btn.querySelector('h3').classList.add('text-teal-700');
+                    btn.querySelector('h3').classList.remove('text-slate-600');
+                    btn.querySelector('.workflow-dot').classList.add('bg-teal-500');
+                    btn.querySelector('.workflow-dot').classList.remove('bg-slate-300');
+
+                    // Inject content
+                    workflowContentArea.innerHTML = `
+                        <div class="fade-in">
+                            <div class="inline-block bg-teal-100 text-teal-800 px-3 py-1 rounded-full text-xs font-bold mb-4 tracking-wider">STEP ${step}</div>
+                            <h3 class="text-2xl font-bold text-slate-800 mb-3">${workflowData[step].title}</h3>
+                            <p class="text-slate-600 leading-relaxed text-lg">${workflowData[step].content}</p>
+                        </div>
+                    `;
                 });
-                btn.classList.add('bg-teal-600', 'text-white');
-                btn.classList.remove('bg-stone-200', 'text-stone-700');
-
-                // Render specific chart
-                renderChart(btn.getAttribute('data-topo'));
             });
-        });
 
+            // --- Module 3: Topologies Chart Logic ---
+            const ctx = document.getElementById('topologyChart').getContext('2d');
+            let topoChart = null;
+
+            // Topology Data Generators (Adding noise to mathematical shapes)
+            // Points are objects {x, y, pseudo} where pseudo defines the color gradient
+            function generateTopologyData(type) {
+                const data = [];
+                const addNoise = (val, amount) => val + (Math.random() - 0.5) * amount;
+
+                if (type === 'linear') {
+                    for (let i = 0; i < 200; i++) {
+                        const t = i / 200;
+                        data.push({ x: t * 10, y: addNoise(5, 1.5), pseudo: t });
+                    }
+                } 
+                else if (type === 'bifurcation') {
+                    // Trunk
+                    for (let i = 0; i < 100; i++) {
+                        const t = i / 100;
+                        data.push({ x: t * 4, y: addNoise(5, 1), pseudo: t * 0.4 });
+                    }
+                    // Branch A (Up)
+                    for (let i = 0; i < 75; i++) {
+                        const t = i / 75;
+                        data.push({ x: 4 + t * 5, y: 5 + t * 3 + addNoise(0, 1), pseudo: 0.4 + t * 0.6 });
+                    }
+                    // Branch B (Down)
+                    for (let i = 0; i < 75; i++) {
+                        const t = i / 75;
+                        data.push({ x: 4 + t * 5, y: 5 - t * 3 + addNoise(0, 1), pseudo: 0.4 + t * 0.6 });
+                    }
+                }
+                else if (type === 'circular') {
+                    for (let i = 0; i < 250; i++) {
+                        const angle = Math.random() * Math.PI * 2;
+                        const r = 4 + addNoise(0, 1);
+                        // Map angle 0-2PI to pseudotime 0-1
+                        const pseudo = angle / (Math.PI * 2);
+                        data.push({ x: 5 + r * Math.cos(angle), y: 5 + r * Math.sin(angle), pseudo: pseudo });
+                    }
+                }
+                else if (type === 'tree') {
+                    // Trunk
+                    for (let i = 0; i < 60; i++) {
+                        const t = i / 60;
+                        data.push({ x: t * 3, y: addNoise(5, 0.8), pseudo: t * 0.3 });
+                    }
+                    // Main Branch 1
+                    for (let i = 0; i < 50; i++) {
+                        const t = i / 50;
+                        data.push({ x: 3 + t * 3, y: 5 + t * 2 + addNoise(0, 0.8), pseudo: 0.3 + t * 0.3 });
+                    }
+                    // Main Branch 2
+                    for (let i = 0; i < 50; i++) {
+                        const t = i / 50;
+                        data.push({ x: 3 + t * 4, y: 5 - t * 3 + addNoise(0, 0.8), pseudo: 0.3 + t * 0.4 });
+                    }
+                    // Sub Branch 1A
+                    for (let i = 0; i < 40; i++) {
+                        const t = i / 40;
+                        data.push({ x: 6 + t * 3, y: 7 + t * 1 + addNoise(0, 0.6), pseudo: 0.6 + t * 0.4 });
+                    }
+                    // Sub Branch 1B
+                    for (let i = 0; i < 40; i++) {
+                        const t = i / 40;
+                        data.push({ x: 6 + t * 3, y: 7 - t * 1 + addNoise(0, 0.6), pseudo: 0.6 + t * 0.4 });
+                    }
+                }
+                return data;
+            }
+
+            const topoDescriptions = {
+                'linear': '<strong>線性 (Linear)：</strong> 細胞從狀態 A 直接演變為狀態 B（例如：前體細胞 → 成熟細胞）。',
+                'bifurcation': '<strong>分叉 (Bifurcation)：</strong> 細胞面臨「命運選擇」，分化為兩種不同的細胞類型（如：造血幹細胞分化為髓系或淋巴系）。',
+                'circular': '<strong>循環 (Circular)：</strong> 描述細胞週期（Cell Cycle）或具週期性特徵的生理過程。狀態會回到原點。',
+                'tree': '<strong>樹狀/複雜圖 (Tree)：</strong> 包含多個分支與交叉，適用於複雜組織發育研究，展示多種終端分化。'
+            };
+
+            function updateChart(type) {
+                const rawData = generateTopologyData(type);
+                
+                // Color mapping function based on pseudotime value (0 to 1)
+                // Using d3.interpolateTurbo roughly (Blue -> Green -> Yellow -> Red)
+                const getColor = (t) => {
+                    const r = Math.max(0, Math.min(255, Math.floor(255 * (1.5 - Math.abs(1 - 4 * (t - 0.5))))));
+                    const g = Math.max(0, Math.min(255, Math.floor(255 * (1.5 - Math.abs(1 - 4 * (t - 0.25))))));
+                    const b = Math.max(0, Math.min(255, Math.floor(255 * (1.5 - Math.abs(1 - 4 * t)))));
+                    return `rgba(${r}, ${g}, ${b}, 0.7)`;
+                };
+
+                const pointColors = rawData.map(d => getColor(d.pseudo));
+
+                if (topoChart) {
+                    topoChart.destroy();
+                }
+
+                topoChart = new Chart(ctx, {
+                    type: 'scatter',
+                    data: {
+                        datasets: [{
+                            label: '細胞狀態點',
+                            data: rawData,
+                            backgroundColor: pointColors,
+                            borderColor: 'transparent',
+                            pointRadius: 4,
+                            pointHoverRadius: 7
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: {
+                            duration: 800,
+                            easing: 'easeOutQuart'
+                        },
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: (context) => {
+                                        const p = context.raw.pseudo.toFixed(2);
+                                        return `擬時序值: ${p}`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: { display: false, min: -1, max: 11 },
+                            y: { display: false, min: 0, max: 10 }
+                        }
+                    }
+                });
+
+                document.getElementById('topo-description').innerHTML = topoDescriptions[type];
+            }
+
+            // Initial Chart Render
+            updateChart('linear');
+
+            // Topology Buttons Logic
+            const topoBtns = document.querySelectorAll('.topo-btn');
+            topoBtns.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    topoBtns.forEach(b => {
+                        b.classList.remove('bg-teal-600', 'text-white', 'active');
+                        b.classList.add('bg-slate-100', 'text-slate-700');
+                    });
+                    btn.classList.add('bg-teal-600', 'text-white', 'active');
+                    btn.classList.remove('bg-slate-100', 'text-slate-700');
+                    
+                    updateChart(btn.getAttribute('data-topo'));
+                });
+            });
+
+        });
     </script>
 </body>
 </html>
